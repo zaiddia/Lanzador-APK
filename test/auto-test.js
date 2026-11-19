@@ -999,25 +999,23 @@ const { AdbClient, friendlyInstallError, friendlyLaunchError } = require('../src
     assert(/_guestLocale/.test(emuJs), '要有可配置的语言来源');
     // Idioma por defecto: español latinoamericano; teclado pinyin opcional y apagado
     assert(/locale:\s*'es-419'/.test(storeJs), 'el idioma por defecto debe ser es-419');
-    assert(/chineseIme:\s*false/.test(storeJs), 'el teclado pinyin debe venir apagado');
+    assert(!/chineseIme/.test(storeJs), 'ya no hay opción de teclado pinyin');
     assert(/timezone:\s*''/.test(storeJs), 'la zona horaria debe seguir al PC por defecto');
     assert(!/Asia\/Shanghai/.test(adbJs), 'no debe forzarse la zona horaria de Shanghái');
 
-    // 输入法：随包带 APK、开机装好并启用
-    assert(fs.existsSync(path.join(root, 'assets', 'PinyinIME.apk')), '缺少 PinyinIME.apk');
-    assert(/ensureChineseIme/.test(adbJs), 'adb 需要 ensureChineseIme');
-    assert(/com\.android\.inputmethod\.pinyin/.test(adbJs), '要用谷歌拼音输入法');
-    assert(/ime enable/.test(adbJs) && /default_input_method/.test(adbJs), '要启用并设为默认');
-    assert(/ensureChineseIme/.test(engJs), 'prepare() 里要真正调用安装');
-    assert(/_chineseReady/.test(engJs), '中文初始化要幂等（每次开机只做一次）');
-    assert(/chineseIme/.test(engJs), '要允许用户关掉');
+    // Teclado: nada de pinyin; se activa el teclado latino que trae la imagen
+    assert(!fs.existsSync(path.join(root, 'assets', 'PinyinIME.apk')), 'el APK pinyin debe haberse quitado');
+    assert(!/PinyinIME|ensureChineseIme/.test(adbJs + engJs), 'no debe quedar código del teclado pinyin');
+    assert(/ensureLatinKeyboard/.test(adbJs) && /ensureLatinKeyboard/.test(engJs), 'debe activarse el teclado latino');
+    assert(/ime enable/.test(adbJs) && /ime set/.test(adbJs), 'debe activarlo y dejarlo como predeterminado');
 
     // 联网验证端点：不能让 gstatic 把网络标成「!」
     assert(/captive_portal_http_url/.test(adbJs), '要设置国内联网验证端点');
     assert(/connectivitycheck\.gstatic\.com/.test(adbJs), 'debe usar el endpoint estándar de Android');
 
     // 设置页要有开关
-    assert(/setLocale/.test(html) && /setChineseIme/.test(html), '设置页要暴露语言/输入法开关');
+    assert(/setLocale/.test(html) && !/setChineseIme/.test(html), 'idioma configurable y sin interruptor de pinyin');
+    assert(/btnAndroidKeyboard/.test(html), 'acceso a los ajustes de teclado físico');
   });
 
   await test('方向自愈：平板/横屏画面躺倒 90° 要能自动纠正', () => {

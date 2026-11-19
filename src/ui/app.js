@@ -801,6 +801,7 @@ function bindAndroid() {
   $('btnAndroidDisplay').addEventListener('click', () => open('display'));
   $('btnAndroidSound').addEventListener('click', () => open('sound'));
   $('btnAndroidLocale').addEventListener('click', () => open('locale'));
+  if ($('btnAndroidKeyboard')) $('btnAndroidKeyboard').addEventListener('click', () => open('keyboard'));
   $('btnAndroidApps').addEventListener('click', () => open('apps'));
 }
 
@@ -1055,7 +1056,6 @@ function fillSettings(s) {
   if ($('setDataGB')) $('setDataGB').value = String(Number(eng.dataPartitionGB || 0));
   if ($('setFastDns')) $('setFastDns').checked = eng.fastDns !== false;
   if ($('setLocale')) $('setLocale').value = eng.locale || 'es-419';
-  if ($('setChineseIme')) $('setChineseIme').checked = eng.chineseIme !== false;
   if ($('setKeepSnapshot')) $('setKeepSnapshot').checked = eng.keepSnapshot !== false;
   $('setDisplayMode').value = d.mode === 'fullscreen' ? 'fullscreen' : 'window';
   if ($('setAutoFullscreen')) $('setAutoFullscreen').value = d.autoFullscreenOnLaunch === true ? 'on' : 'off';
@@ -1643,16 +1643,6 @@ function bindSettings() {
     $('setLocale').addEventListener('change', async (e) => {
       state.settings = await api.setSettings({ engine: { locale: e.target.value } });
       toast({ title: 'Idioma del sistema actualizado', body: 'Se aplica al reiniciar el runtime de Android', type: 'ok' });
-    });
-  }
-  if ($('setChineseIme')) {
-    $('setChineseIme').addEventListener('change', async (e) => {
-      state.settings = await api.setSettings({ engine: { chineseIme: e.target.checked } });
-      toast({
-        title: e.target.checked ? 'Teclado pinyin (chino) activado' : 'Teclado pinyin (chino) desactivado',
-        body: 'Se aplica al reiniciar el runtime de Android',
-        type: 'ok',
-      });
     });
   }
   if ($('setKeepSnapshot')) {

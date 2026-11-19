@@ -1067,59 +1067,32 @@ class AdbClient {
   }
 
   /**
-   * 保证 guest 里有一套能打中文的输入法。
+   * Garantiza que el teclado en pantalla sea el teclado latino que ya trae la imagen
+   * (Gboard o el teclado AOSP «LatinIME»). No instala nada: solo lo activa y lo deja
+   * como predeterminado si no hay otro teclado latino activo. Con el idioma del sistema
+   * en español, el teclado muestra la distribución en español.
    *
-   * 系统镜像（Google Play 版）只带 LatinIME（英文键盘），Gboard 的中文语言包又要
-   * 联网下载、在模拟器里极不可靠。所以随包带一个 AOSP 谷歌拼音输入法
-   * （assets/PinyinIME.apk，含 x86_64 原生库），开机后静默装好并启用。
-   *
-   * 幂等：已安装就跳过，用户手动换掉默认输入法后不强行改回去。
-   *
-   * @param {string} apkPath PinyinIME.apk 的绝对路径
-   * @param {object} [o] { setDefault } 是否设为默认输入法（默认 true）
-   * @returns {Promise<{ok:boolean, installed?:boolean, ime?:string, reason?:string}>}
+   * Idempotente y no fatal: si la imagen no trae ninguno, devuelve ok:false y sigue.
+   * @returns {Promise<{ok:boolean, ime?:string, reason?:string}>}
    */
-  async ensureChineseIme(apkPath, { setDefault = true } = {}) {
-    const IME_PKG = 'com.android.inputmethod.pinyin';
-    const IME_ID = IME_PKG + '/.PinyinIME';
-    // 组件名写死但校验存在：ime list -s 只列**已启用**的输入法，用它判断
-    // 「装没装」会在刚安装完时误判为「服务未注册」，于是永远走不到 ime enable。
-    // 正确做法是用 pkg 是否已安装来判断，组件名用 ime list -a 交叉确认。
-    const pkgInstalled = async () => {
-      const out = await this.shell(`pm list packages ${IME_PKG}`, { timeout: 10000 }).catch(() => '');
-      return String(out).indexOf('package:' + IME_PKG) >= 0;
-    };
-    const findEnabledIme = async () => {
-      const out = await this.shell('ime list -s', { timeout: 10000 }).catch(() => '');
-      return String(out).split('\n').map((s) => s.trim()).find((s) => s.indexOf(IME_PKG) === 0) || '';
-    };
+  async ensureLatinKeyboard() {
+    const PREFERRED = [
+      'com.google.android.inputmethod.latin/com.android.inputmethod.latin.LatinIME',
+      'com.android.inputmethod.latin/.LatinIME',
+    ];
     try {
-      let installed = await pkgInstalled();
-      let justInstalled = false;
-      if (!installed) {
-        if (!apkPath || !fs.existsSync(apkPath)) {
-          return { ok: false, reason: 'Falta el APK del teclado' };
-        }
-        await this.install(apkPath);
-        installed = true;
-        justInstalled = true;
-        // 装完等包管理器扫到这个包
-        for (let i = 0; i < 6; i += 1) {
-          // eslint-disable-next-line no-await-in-loop
-          installed = await pkgInstalled();
-          if (installed) break;
-          // eslint-disable-next-line no-await-in-loop
-          await new Promise((r) => setTimeout(r, 800));
-        }
-      }
-      if (!installed) return { ok: false, justInstalled, reason: 'El paquete del teclado no está registrado' };
-      // 启用 + 设为默认（secure settings 可写，不需要 root）。
-      // 每次都执行：从旧快照恢复时 enabled 标记可能丢失，或用户手动换过默认输入法。
-      const cmds = [`ime enable ${IME_ID}`];
-      if (setDefault) cmds.push(`settings put secure default_input_method ${IME_ID}`);
+      const all = String(await this.shell('ime list -a -s', { timeout: 10000 }).catch(() => ''))
+        .split('\n').map((x) => x.trim()).filter(Boolean);
+      const ime = PREFERRED.find((id) => all.includes(id))
+        || all.find((id) => /inputmethod\.latin/.test(id));
+      if (!ime) return { ok: false, reason: 'La imagen no trae un teclado latino' };
+      if (!/^[\w.]+\/[\w.]+$/.test(ime)) return { ok: false, reason: 'Identificador de teclado inesperado' };
+      const cur = String(await this.shell('settings get secure default_input_method', { timeout: 8000 }).catch(() => '')).trim();
+      const cmds = [`ime enable ${ime}`];
+      // Solo se cambia el predeterminado si no hay uno latino (p. ej. quedó el pinyin de una versión anterior).
+      if (!/inputmethod\.latin/.test(cur)) cmds.push(`ime set ${ime}`);
       await this.shell(cmds.join(' ; '), { timeout: 12000 }).catch(() => '');
-      const ime = await findEnabledIme();
-      return { ok: !!ime, installed: justInstalled, ime: ime || IME_ID };
+      return { ok: true, ime };
     } catch (e) {
       return { ok: false, reason: e.message };
     }

@@ -654,28 +654,19 @@ class Runtime {
     if (!this._freeformReady) {
       try { this._freeformReady = await client.ensureFreeform(); } catch (_) { /* ignore */ }
     }
-    // 中文环境（系统语言 + 中文输入法）每次**开机**只做一次。
-    // 系统语言靠 emulator -prop 注入（SELinux 保护，运行时改不了），这里补的是
-    // 应用级 locale / 时区，以及静默装好并启用随包带的谷歌拼音输入法。
-    // 用户可在设置里关掉自动配置（engine.chineseIme=false）。
-    // Language + time zone are applied on every boot unless locale is 'off'; the Chinese
-    // Pinyin keyboard is installed only when the user explicitly enables it.
+    // Configuración regional (idioma + zona horaria + teclado latino), una vez por **arranque**.
+    // El idioma del sistema se inyecta al lanzar el emulador (-change-locale); aquí se
+    // completan el idioma a nivel de ajustes, la zona horaria del PC y el teclado latino.
+    // Se desactiva poniendo engine.locale = 'off'.
     const wantLocale = String(this.settings.engine.locale || 'es-419');
-    if (!this._chineseReady && (wantLocale !== 'off' || this.settings.engine.chineseIme === true)) {
+    if (!this._chineseReady && wantLocale !== 'off') {
       try {
         const locale = wantLocale;
-        if (locale !== 'off') await client.ensureChineseLocale(locale, this._hostTimezone());
-        let r = { ok: true };
-        if (this.settings.engine.chineseIme === true) {
-          const path = require('path');
-          const apk = path.join(this.appRoot, 'assets', 'PinyinIME.apk');
-          r = await client.ensureChineseIme(apk, {
-            setDefault: this.settings.engine.chineseImeDefault === true,
-          });
-          this.log(`Teclado pinyin: ${r.ok ? (r.installed ? 'instalado y activado' : 'listo') : (r.reason || 'no listo')}`);
-        }
-        // Only mark as done on success so a transient adb hiccup is retried next time.
-        if (r && r.ok) this._chineseReady = true;
+        await client.ensureChineseLocale(locale, this._hostTimezone());
+        // Teclado latino de la imagen; un fallo aquí no impide abrir apps.
+        const kb = await client.ensureLatinKeyboard();
+        this.log(`Teclado latino: ${kb.ok ? kb.ime : (kb.reason || 'no disponible')}`);
+        this._chineseReady = true;
         // -change-locale 只在「全量引导」时执行并重启 framework；从 quickboot 快照
         // 恢复时会被跳过。旧快照是英文的，所以检测到系统语言不对就作废快照、
         // 让下次开机冷启动一次（带 -change-locale）。之后存的新快照就是中文的，

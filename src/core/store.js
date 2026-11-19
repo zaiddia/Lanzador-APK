@@ -84,9 +84,6 @@ const DEFAULT_SETTINGS = {
     timezone: '',
     // 中文输入法：随包带 AOSP 谷歌拼音输入法，开机后静默安装并启用。
     // 系统镜像只带 LatinIME（英文键盘），不装就打不了中文。
-    // Optional Chinese Pinyin keyboard (assets/PinyinIME.apk). Off by default.
-    chineseIme: false,
-    chineseImeDefault: false,
     // 快照：quickboot 内存快照让二次启动只要几秒，代价是磁盘上多一份约 2~3GB 的
     // ram.bin。磁盘紧张时可以关掉（只影响启动速度，不影响应用数据）。
     keepSnapshot: true,
