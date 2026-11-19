@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' file: data:; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+<title>Lanzador APK</title>
+<link rel="stylesheet" href="style.css" />
+<link rel="stylesheet" href="theme.css" />
+</head>
+<body>
+
+<!-- 品牌标记：小尺寸下也要认得出来，所以用矢量而不是 1024 的位图缩到 22px -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="brandGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2ee6a6"/>
+      <stop offset="55%" stop-color="#12b886"/>
+      <stop offset="100%" stop-color="#0a6f47"/>
+    </linearGradient>
+  </defs>
+  <symbol id="brandMark" viewBox="0 0 48 48">
+    <rect x="1.5" y="1.5" width="45" height="45" rx="13.5" fill="url(#brandGrad)"/>
+    <rect x="1.5" y="1.5" width="45" height="45" rx="13.5" fill="none" stroke="rgba(255,255,255,.34)" stroke-width="1.4"/>
+    <path d="M18.5 14.5 35 24 18.5 33.5z" fill="#fff"/>
+  </symbol>
+</svg>
+
+<header class="titlebar">
+  <div class="brand">
+    <div class="logo" aria-hidden="true">
+      <svg viewBox="0 0 48 48" width="22" height="22"><use href="#brandMark"/></svg>
+    </div>
+    <span class="brand-name">Lanzador APK</span>
+    <span class="brand-tag" id="engineTag">Runtime no conectado</span>
+  </div>
+  <div class="titlebar-spacer"></div>
+  <div class="titlebar-actions">
+    <button class="icon-btn" id="btnSettings" title="Configuración">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6h.09A1.7 1.7 0 0 0 10 3.05V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9v.09a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1z"/></svg>
+    </button>
+  </div>
+</header>
+
+<main class="shell">
+  <section class="toolbar">
+    <div class="search">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="search" type="text" placeholder="Buscar apps instaladas" autocomplete="off" />
+    </div>
+    <div class="toolbar-right">
+      <button class="btn primary" id="btnInstall">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v10"/><path d="m7 12 5 5 5-5"/><path d="M5 20h14"/></svg>
+        Instalar APK
+      </button>
+    </div>
+  </section>
+
+  <section class="content" id="content">
+    <div class="grid" id="grid"></div>
+    <div class="empty" id="empty">
+      <div class="empty-art">
+        <svg viewBox="0 0 160 120" width="220">
+          <rect x="18" y="16" width="124" height="50" rx="10" fill="#eef1f4" stroke="#dde2e8"/>
+          <rect x="34" y="34" width="30" height="14" rx="4" fill="#cfd8e3"/>
+          <rect x="72" y="34" width="52" height="6" rx="3" fill="#dde5ee"/>
+          <rect x="72" y="44" width="36" height="6" rx="3" fill="#e6ecf3"/>
+          <path d="M80 76v22m0 0-9-9m9 9 9-9" stroke="#9fb0c2" stroke-width="3" fill="none" stroke-linecap="round"/>
+          <rect x="40" y="100" width="80" height="8" rx="4" fill="#eef1f4"/>
+        </svg>
+      </div>
+      <h2>Arrastra un APK aquí para instalarlo</h2>
+      <p>Al terminar la instalación se crea un icono en el escritorio; con doble clic se abre en su propia ventana, como cualquier programa de Windows.<br/>Si la asociación de .apk está activa, al hacer doble clic en un APK en el Explorador también se instala en Lanzador APK.</p>
+      <button class="btn primary lg" id="btnInstall2">Elegir archivo APK</button>
+      <p class="hint" id="emptyHint"></p>
+    </div>
+  </section>
+
+  <footer class="statusbar">
+    <div class="status-left">
+      <span class="dot" id="statusDot"></span>
+      <span id="statusText">Comprobando el runtime…</span>
+      <button class="status-chip" id="envChip" hidden></button>
+    </div>
+    <div class="status-right">
+      <span class="status-item status-net" id="statusNet" hidden></span>
+      <span class="sep" id="statusNetSep" hidden></span>
+      <span class="status-item" id="statusDevice"></span>
+      <span class="sep"></span>
+      <span class="status-item" id="statusStats"></span>
+      <span class="sep"></span>
+      <a class="status-item powered-link" href="https://github.com/zaiddia/Lanzador-APK" target="_blank" rel="noopener">Powered by zaiddia</a>
+    </div>
+  </footer>
+</main>
+
+<!-- 启动欢迎卡：替代原来散落的各种启动小提示 -->
+<div class="modal-mask welcome-mask" id="welcomeMask" hidden>
+  <div class="welcome" role="dialog" aria-modal="true" aria-labelledby="welcomeHi">
+    <div class="welcome-hero">
+      <div class="welcome-halo"></div>
+      <div class="welcome-badge"><svg viewBox="0 0 48 48" width="44" height="44" aria-hidden="true"><use href="#brandMark"/></svg></div>
+      <div class="welcome-hi" id="welcomeHi">Hola</div>
+      <div class="welcome-sub" id="welcomeSub">Lanzador APK está listo</div>
+    </div>
+    <div class="welcome-body">
+      <div class="welcome-stats" id="welcomeStats"></div>
+      <div class="welcome-tips" id="welcomeTips"></div>
+      <label class="welcome-opt">
+        <input type="checkbox" id="welcomeNever" />
+        <span>No volver a mostrar al iniciar</span>
+      </label>
+    </div>
+    <div class="welcome-actions">
+      <button class="btn ghost" id="welcomeSettings">Abrir configuración</button>
+      <button class="btn primary" id="welcomeOk">Empezar</button>
+    </div>
+  </div>
+</div>
+
+<!-- 安装进度 -->
+<div class="toast-wrap" id="toastWrap"></div>
+
+<!-- 拖放遮罩 -->
+<div class="dropzone" id="dropzone">
+  <div class="dropzone-inner">
+    <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M5 20h14"/></svg>
+    <strong>Suelta para instalar</strong>
+    <span>Admite uno o varios archivos .apk</span>
+  </div>
+</div>
+
+<!-- 右键菜单 -->
+<div class="ctxmenu" id="ctxmenu"></div>
+
+<!-- 设置 -->
+<div class="modal-mask" id="settingsMask">
+  <div class="modal">
+    <header class="modal-head">
+      <h2>Configuración</h2>
+      <div class="set-search-wrap">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="setSearch" class="set-search" type="search" autocomplete="off" placeholder="Buscar opciones: horizontal / memoria / proxy / instantánea…" />
+        <button class="set-search-clear" id="btnClearSearch" type="button" hidden aria-label="Borrar búsqueda">×</button>
+      </div>
+      <button class="icon-btn" id="btnCloseSettings">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </header>
+    <div class="modal-main">
+      <nav class="set-nav" id="setNav" aria-label="Categorías de configuración">
+        <button class="set-nav-item on" type="button" data-cat="basic">
+          <span class="set-nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span>
+          <span class="set-nav-label">General</span>
+          <span class="set-nav-badge" data-badge="basic" hidden></span>
+        </button>
+        <button class="set-nav-item" type="button" data-cat="display">
+          <span class="set-nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M9 20h6M12 17v3"/></svg></span>
+          <span class="set-nav-label">Pantalla y ventanas</span>
+          <span class="set-nav-badge" data-badge="display" hidden></span>
+        </button>
+        <button class="set-nav-item" type="button" data-cat="input">
+          <span class="set-nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10v4M17 10v4"/></svg></span>
+          <span class="set-nav-label">Controles</span>
+          <span class="set-nav-badge" data-badge="input" hidden></span>
+        </button>
+        <button class="set-nav-item" type="button" data-cat="perf">
+          <span class="set-nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M13 3 5 14h6l-1 7 8-11h-6z"/></svg></span>
+          <span class="set-nav-label">Rendimiento</span>
+          <span class="set-nav-badge" data-badge="perf" hidden></span>
+        </button>
+        <button class="set-nav-item" type="button" data-cat="net">
+          <span class="set-nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12a7 7 0 0 1 14 0M8.5 12a3.5 3.5 0 0 1 7 0"/><circle cx="12" cy="16" r="1.6"/></svg></span>
+          <span class="set-nav-label">Red y descargas</span>
+          <span class="set-nav-badge" data-badge="net" hidden></span>
+        </button>
+        <button class="set-nav-item" type="button" data-cat="diag">
+          <span class="set-nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 3 8v5c0 5 3.8 7.6 9 9 5.2-1.4 9-4 9-9V8z"/><path d="m9 12 2 2 4-4"/></svg></span>
+          <span class="set-nav-label">Diagnóstico</span>
+          <span class="set-nav-badge" data-badge="diag" hidden></span>
+        </button>
+        <button class="set-nav-item" type="button" data-cat="files">
+          <span class="set-nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>
+          <span class="set-nav-label">Archivos y sistema</span>
+          <span class="set-nav-badge" data-badge="files" hidden></span>
+        </button>
+        <button class="set-nav-item" type="button" data-cat="about">
+          <span class="set-nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></span>
+          <span class="set-nav-label">Actualizaciones</span>
+          <span class="set-nav-badge" data-badge="about" hidden></span>
+        </button>
+      </nav>
+    <div class="modal-body" id="settingsBody">
+      <div class="group" id="runtimeGroup" data-cat="basic">
+        <div class="group-title">Runtime y entorno</div>
+        <div class="field">
+          <label>Estado</label>
+          <div class="row" style="align-items:center;">
+            <span class="inline-note" id="setupStateText">Comprobando…</span>
+            <span style="flex:1"></span>
+            <button class="btn primary sm" id="btnDeployAll">Completar con un clic</button>
+            <button class="btn ghost sm" id="btnSetupAdvanced">Avanzado: conectar un runtime existente</button>
+          </div>
+          <span class="sub" id="setupNote">Totalmente automático: sin elegir imagen, sin activar aceleración, sin ajustar memoria</span>
+        </div>
+        <div class="field">
+          <div class="steps" id="setupSteps"></div>
+        </div>
+        <div id="envCheck" class="env-check" hidden></div>
+
+        <div class="setup-guide" id="setupGuide" hidden>
+          <h2>Instalar Android en un disco virtual</h2>
+          <p class="guide-sub">Se abrió la ventana de la máquina virtual. Sigue estos 6 pasos una vez; después Lanzador APK arrancará directamente desde el disco, sin necesitar la imagen.</p>
+          <ol class="guide-list">
+            <li><b>Menú de arranque</b>: con <kbd>↓</kbd> elige <code>Installation - Install Android-x86 to harddisk</code> y pulsa Enter</li>
+            <li><b>Choose Partition</b>: elige <code>Create/Modify partitions</code>; si pregunta por GPT, elige <code>No</code></li>
+            <li><b>Particionar con cfdisk</b>: <code>New</code> → <code>Primary</code> → Enter para la capacidad → <code>Bootable</code> → <code>Write</code> → escribe <code>yes</code> → <code>Quit</code></li>
+            <li><b>Formatear</b>: elige <code>vda1</code> → cuando pida formatear, elige <code>ext4</code> → <code>Yes</code></li>
+            <li><b>Arranque y sistema</b>: <code>Install GRUB</code> elige <code>Yes</code>; <code>Install /system as read-write</code> elige <code>Yes</code></li>
+            <li><b>Finalizar</b>: cuando llegue al 100 %, pulsa «Ya terminé la instalación» abajo (Lanzador APK reiniciará y tomará el control)</li>
+          </ol>
+          <p class="guide-tip">Si después dice que adb no está conectado: en la ventana de la máquina virtual pulsa <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>F1</kbd> para abrir la terminal, ejecuta
+            <code>setprop service.adb.tcp.port 5555</code>, <code>stop adbd</code>, <code>start adbd</code>, y luego pulsa <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>F7</kbd> para volver a la interfaz gráfica.</p>
+          <div class="guide-foot">
+            <button class="btn primary" id="btnMarkInstalled">Ya terminé la instalación</button>
+            <button class="btn ghost" id="btnGuideClose">Más tarde</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="group" data-cat="basic">
+        <div class="group-title">Modo automático (por defecto, sin configurar nada)</div>
+        <div class="field">
+          <label>Parámetros adaptados a este equipo</label>
+          <div class="inline-note" id="autoProfileText">Comprobando…</div>
+          <span class="sub">Memoria, núcleos, motor de renderizado, puertos y aceleración se eligen solos; si el arranque falla, se reintenta automáticamente con opciones más seguras. Lanzador APK usa <b>un puerto adb propio, el 5044</b> (el adb de tu sistema usa el 5037), así que en la línea de comandos
+            <code>adb devices</code> no verás este dispositivo Android; es un aislamiento intencional. Para conectarte usa
+            <code>$env:ANDROID_ADB_SERVER_PORT=5044</code> y luego ejecuta adb. Ojo: no hagas manualmente <code>adb connect</code> al puerto 5555, porque mostrará el aviso del sistema «¿Permitir la depuración USB?» sobre la app en ejecución.</span>
+        </div>
+        <div class="field">
+          <label>Espacio total usado (runtime + datos de Android + caché)</label>
+          <div class="row">
+            <span class="inline-note" id="usageText">Calculando…</span>
+            <button class="btn ghost sm" id="btnCleanup">Limpiar archivos recuperables</button>
+            <button class="btn ghost sm" id="btnLeftovers" title="Busca y borra carpetas de versiones anteriores, entradas de desinstalación obsoletas y temporales de actualización">Limpiar restos de versiones anteriores</button>
+            <button class="btn ghost sm" id="btnRepairNetwork" title="Si la máquina virtual Android no tiene red (las páginas en línea de las apps se quedan en negro o cargando), esto restablece los datos de Android para repararla. La lista de apps se conserva y se reinstalan al abrirlas">Reparar red</button>
+            <button class="btn ghost sm danger" id="btnResetData" title="Borra los datos de usuario de /data, las apps instaladas y las instantáneas de arranque rápido, y deja Android como recién instalado">Restablecer datos de Android</button>
+          </div>
+          <label class="checkbox-inline">
+            <input type="checkbox" id="chkCleanSnapshots" />
+            <span>Borra también las instantáneas de arranque rápido del AVD actual (detiene antes el runtime y libera varios GB)</span>
+          </label>
+          <span class="sub">La imagen del sistema se comparte en todo el equipo y los datos de apps se guardan en una capa diferencial; las imágenes y instantáneas antiguas, los registros y los bloqueos se pueden recuperar. Los registros rotan al llegar al límite y no crecen sin fin. «Restablecer datos de Android» borra de verdad varios GB de datos de usuario y solo conserva el sistema.</span>
+        </div>
+        <div class="runtime-actions">
+          <button class="btn ghost sm" id="btnDiagnostics">Exportar informe de diagnóstico</button>
+          <button class="btn ghost sm" id="btnRebuildShortcuts">Recrear accesos directos</button>
+          <span class="inline-note">El informe de diagnóstico sirve para resolver problemas; recrear completa los accesos del escritorio y del menú Inicio</span>
+        </div>
+        <div class="field switch-field">
+          <div>
+            <label>Iniciar con Windows (activado por defecto)</label>
+            <span class="sub">Se queda en la bandeja al iniciar sesión en Windows, así los iconos del escritorio abren las apps al instante sin iniciarlo a mano.</span>
+          </div>
+          <input type="checkbox" id="setAutoStart" class="switch" />
+        </div>
+      </div>
+
+      <div class="group" data-cat="display">
+        <div class="group-title">Ventanas de las apps</div>
+        <div class="field">
+          <label>Modo de visualización</label>
+          <select id="setDisplayMode">
+            <option value="window">Ventana vertical (se puede estirar; recuerda el tamaño de cada app)</option>
+            <option value="fullscreen">Pantalla completa (llena la pantalla con proporción de teléfono y bordes negros a los lados)</option>
+          </select>
+          <span class="sub">Pulsa <b>F11</b> o usa el menú de la bandeja para cambiar; la pantalla completa solo agranda la ventana, no cambia la proporción y no reinicia la app.</span>
+        </div>
+        <div class="field">
+          <label>Pantalla completa automática</label>
+          <select id="setAutoFullscreen">
+            <option value="off">Desactivada (usa el modo de visualización de arriba)</option>
+            <option value="on">Activada · cada app se abre en pantalla completa</option>
+          </select>
+          <span class="sub">Con esto activado, cada app se abre llenando la pantalla sin pulsar F11. Funciona mejor junto con «horizontal» abajo: la pantalla horizontal ya tiene la proporción del monitor y no deja bordes negros.</span>
+        </div>
+        <div class="field">
+          <label>Orientación de la pantalla</label>
+          <select id="setOrientationMode">
+            <option value="auto">Según la app (recomendado · elige horizontal o vertical y llena la pantalla sin bordes)</option>
+            <option value="portrait">Forzar vertical (proporción de teléfono, ideal para videos cortos y lectura)</option>
+            <option value="landscape">Forzar horizontal (pantalla ancha, ideal para series y juegos)</option>
+          </select>
+          <span class="sub">La orientación en Android depende de <b>la orientación real de la pantalla del teléfono virtual</b>. Si no coincide con la que declara la app, Android solo le da una franja estrecha en el centro con bordes negros; ni cambiar el tamaño de la ventana ni la resolución lo arregla. «Según la app» lee la orientación de la app al instalar el APK y al abrir cambia la pantalla a la que corresponde, así las apps salen derechas y llenan la pantalla. Solo cuando la orientación no coincide se reinicia el runtime una vez (unos segundos); después, las apps con la misma orientación abren al instante.</span>
+        </div>
+        <div class="field">
+          <label>Rotación automática de la imagen</label>
+          <select id="setAutoRotate">
+            <option value="on">Activada (por defecto) · en los ajustes del sistema aparece la rotación automática activada</option>
+            <option value="off">Desactivada · vuelve al comportamiento bloqueado anterior</option>
+          </select>
+          <span class="sub">En Android <b>la rotación automática viene activada por defecto</b>. Esto no cambia la orientación de la imagen: la orientación de la pantalla sigue dependiendo de la estrategia de arriba + ignorar las peticiones de orientación de las apps, así que los sensores no la tuercen. Solo importa para las pocas apps que leen este valor.</span>
+        </div>
+        <div class="field">
+          <label>Diseño de tableta</label>
+          <select id="setTabletMode">
+            <option value="on">Activado (recomendado · densidad 190 dpi, sw606dp usa el diseño de tableta)</option>
+            <option value="off">Desactivado (densidad por defecto de la imagen, diseño de teléfono)</option>
+          </select>
+          <span class="sub">720 de ancho a 190 dpi equivale a 606 dp, justo por encima del punto de corte de tableta de Android (600 dp); algunas apps solo muestran vistas a dos columnas o paneles divididos con este diseño. Al desactivarlo vuelve el diseño de teléfono (letra más grande, menos información). Se aplica la próxima vez que abras una app.</span>
+        </div>
+        <div class="field">
+          <label>Orientación actual de la pantalla</label>
+          <select id="setLandscape">
+            <option value="portrait">Pantalla vertical</option>
+            <option value="landscape">Pantalla horizontal</option>
+          </select>
+          <span class="sub">Es la orientación física que el runtime <b>usa ahora</b>; la escribe automáticamente la estrategia de arriba. Solo en los modos «Forzar» la decides tú por completo.</span>
+        </div>
+        <div class="field">
+          <label>Modo de ventana</label>
+          <select id="setWindowEmbed">
+            <option value="detached">Ventana nativa (por defecto · recomendado) · el emulador abre su propia ventana; fotogramas y escalado más estables</option>
+            <option value="embed">Modo incrustado · la imagen de Android va dentro de la ventana de Lanzador APK, con botón de rotación en la barra de título</option>
+          </select>
+          <span class="sub">La ventana nativa la dibuja y coloca el propio emulador: arrastrar, escalar y rotar responden al instante, sin bordes negros ni clics desplazados; a cambio hay un icono más en la barra de tareas (para horizontal usa el menú de la bandeja o Ctrl+Alt+R). El modo incrustado mete la ventana del emulador dentro de la nuestra: se ve más uniforme y trae botón de rotación, pero al escalar, rotar o cambiar de app puede perder fotogramas y mostrar bordes negros. Se aplica la próxima vez que abras una app.</span>
+        </div>
+        <div class="field" id="portraitField">
+          <label>Tamaño de la imagen vertical</label>
+          <select id="setPortrait">
+            <option value="720x1280">Pequeño · 720 × 1280</option>
+            <option value="900x1600">Mediano · 900 × 1600</option>
+            <option value="1080x1920">Grande · 1080 × 1920</option>
+            <option value="1440x2560">Muy grande · 1440 × 2560</option>
+          </select>
+          <span class="sub">En modo ventana puedes arrastrar los bordes para cambiar el tamaño; aquí se ajusta la resolución interna de Android: cuanto menor, menos recursos usa.</span>
+        </div>
+      </div>
+
+      <div class="group" data-cat="input">
+        <div class="group-title">Botones del ratón</div>
+        <div class="field">
+          <label>Clic izquierdo · confirmar / tocar</label>
+          <span class="sub">El emulador trata el clic izquierdo como un toque con el dedo; mantener y arrastrar es deslizar. No hace falta configurar nada.</span>
+        </div>
+        <div class="field switch-field">
+          <div>
+            <label>Clic derecho · atrás en Android</label>
+            <span class="sub">Por defecto el emulador también trata el clic derecho como un toque (fácil de pulsar sin querer). Al activarlo, el clic derecho solo hace «atrás».</span>
+          </div>
+          <input type="checkbox" id="setMouseRightBack" class="switch" />
+        </div>
+        <div class="field">
+          <label>Rueda · deslizar</label>
+          <select id="setMouseWheelMode">
+            <option value="smooth">Suave (recomendado) · une varios giros en un deslizamiento fluido</option>
+            <option value="native">Nativo · lo procesa el emulador paso a paso</option>
+            <option value="off">Desactivado · no se intercepta la rueda</option>
+          </select>
+          <span class="sub">El modo suave junta los giros de un momento en un solo gesto de deslizar: evita saltos y no abre un proceso de adb por cada paso.</span>
+        </div>
+        <div class="field switch-field">
+          <div>
+            <label>Botones laterales del ratón · atrás / adelante (desactivado por defecto)</label>
+            <span class="sub">La asignación de los botones laterales necesita un gancho global del ratón. Solo se instala mientras una ventana de app de Lanzador APK está en primer plano y se quita al perder el foco o cerrarla, así que no ralentiza el escritorio.</span>
+          </div>
+          <input type="checkbox" id="setMouseSideButtons" class="switch" />
+        </div>
+        <div class="field">
+          <span class="sub">Estas asignaciones solo funcionan con la ventana de la app en primer plano; al volver al escritorio o cerrarla, el ratón funciona como siempre en Windows.</span>
+        </div>
+      </div>
+
+      <div class="group" data-cat="input">
+        <div class="group-title">Asignación de teclado (control de juego)</div>
+        <div class="field switch-field">
+          <div>
+            <label>Activar asignación de teclado</label>
+            <span class="sub">Convierte teclas en toques y deslizamientos en la pantalla táctil de Android. Útil para jugar juegos móviles con teclado (WASD para mover, J/K para habilidades, etc.). Cada app se configura por separado: clic derecho en la tarjeta → «Asignación de teclas» para elegir un perfil o personalizar.</span>
+          </div>
+          <input type="checkbox" id="setKeymapEnabled" class="switch" />
+        </div>
+        <div class="field">
+          <span class="sub" id="keymapHint">La app actual no tiene asignación de teclas. Con clic derecho en la tarjeta puedes aplicar un perfil.</span>
+        </div>
+      </div>
+
+      <div class="group" id="perfGroup" data-cat="perf">
+        <div class="group-title">Rendimiento y uso de recursos</div>
+        <div class="field">
+          <label>Estrategia de recursos</label>
+          <select id="setResourceMode">
+            <option value="save">Ahorro · 2 núcleos / cede el primer plano / 540p (equipos viejos, apps en segundo plano)</option>
+            <option value="balanced">Equilibrado · la mitad de los núcleos / cede el primer plano / 720p (recomendado)</option>
+            <option value="smooth">Fluido · sin límite de núcleos / misma prioridad que el primer plano (video, juegos)</option>
+          </select>
+          <span class="sub">Define cuánta CPU usa la máquina virtual Android y el detalle de la imagen. Si una app de video va a tirones, elige «Fluido»; si solo quieres dejar apps pequeñas abiertas, «Ahorro». Se aplica la próxima vez que abras una app.</span>
+        </div>
+        <div class="field two">
+          <div>
+            <label>Calidad (resolución interna de Android)</label>
+            <select id="setRenderSize">
+              <option value="auto">Automática (según la aceleración)</option>
+              <option value="540x960">Fluida · 540 × 960</option>
+              <option value="720x1280">Equilibrada · 720 × 1280</option>
+              <option value="1080x1920">Alta · 1080 × 1920</option>
+            </select>
+          </div>
+          <div>
+            <label>Partición de datos de Android (aquí se instalan apps y juegos)</label>
+            <select id="setDataGB">
+              <option value="0">Automática</option>
+              <option value="4">4 GB</option>
+              <option value="6">6 GB</option>
+              <option value="8">8 GB</option>
+              <option value="12">12 GB</option>
+              <option value="16">16 GB</option>
+              <option value="24">24 GB</option>
+              <option value="32">32 GB</option>
+              <option value="48">48 GB</option>
+              <option value="64">64 GB (juegos de unos 50 GB)</option>
+              <option value="96">96 GB</option>
+              <option value="128">128 GB</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <div class="row">
+            <button class="btn ghost sm" id="btnGrowData">Ampliar ahora</button>
+            <span class="sub" style="flex:1;margin:0">La ampliación se hace en el sitio: se conservan las apps y partidas guardadas; solo la próxima app tardará unos segundos más en abrir.</span>
+          </div>
+        </div>
+        <div class="field">
+          <span class="sub" id="dataNote">Leyendo la partición de datos…</span>
+        </div>
+        <div class="field">
+          <label>Idioma del sistema</label>
+          <select id="setLocale">
+            <option value="es-419">Español (Latinoamérica) (recomendado)</option>
+            <option value="es-ES">Español (España)</option>
+            <option value="pt-BR">Português (Brasil)</option>
+            <option value="en-US">English (original de la imagen)</option>
+            <option value="zh-CN">中文（简体）</option>
+            <option value="ja-JP">日本語</option>
+            <option value="ko-KR">한국어</option>
+          </select>
+          <span class="sub">Idioma de los ajustes del sistema, avisos de permisos y formato de fecha. Se aplica a la máquina virtual al arrancar;
+            <b>se aplica al reiniciar el runtime</b>. El teclado pinyin (chino) es independiente y se activa abajo.</span>
+        </div>
+        <div class="field switch-field">
+          <div>
+            <label>Teclado pinyin para escribir en chino (opcional)</label>
+            <span class="sub">La imagen solo trae teclado latino. Al activarlo se instala en silencio el teclado pinyin incluido, para escribir en chino dentro de las apps. Desactivado mantiene el teclado original del sistema.</span>
+          </div>
+          <input type="checkbox" id="setChineseIme" class="switch" />
+        </div>
+        <div class="field switch-field">
+          <div>
+            <label>DNS públicos (opcional)</label>
+            <span class="sub">Usa los DNS públicos de Cloudflare (1.1.1.1) y Google (8.8.8.8) en Android. Por defecto Android usa los DNS de este equipo; actívalo solo si con VPN o redes corporativas las páginas tardan en resolver. Si usas dominios internos de tu empresa, déjalo desactivado.</span>
+          </div>
+          <input type="checkbox" id="setFastDns" class="switch" />
+        </div>
+        <div class="field switch-field">
+          <div>
+            <label>Sonido de Android</label>
+            <span class="sub">Permite que suenen los avisos de las apps y el audio de los videos. Desactívalo solo si no necesitas nada de sonido y quieres ahorrar algo de CPU.</span>
+          </div>
+          <input type="checkbox" id="setAudio" class="switch" />
+        </div>
+        <div class="field switch-field">
+          <div>
+            <label>Conservar la instantánea de arranque rápido (recomendado)</label>
+            <span class="sub">La segunda vez que abras una app tardará solo unos segundos, a cambio de unos 2–3 GB extra en disco por el archivo <code>ram.bin</code>. Si te falta espacio, desactívalo: solo afecta la velocidad de arranque, no las apps ni partidas guardadas.</span>
+          </div>
+          <input type="checkbox" id="setKeepSnapshot" class="switch" />
+        </div>
+        <details class="mini-details">
+          <summary>Detalles del contenedor (avanzado)</summary>
+          <div class="field switch-field">
+            <div>
+              <label>Contenedor ligero</label>
+              <span class="sub">Limita la cuota de vCPU y baja la prioridad del proceso para dejar la CPU primero al escritorio de Windows. La «Estrategia de recursos» de arriba ya lo ajusta automáticamente.</span>
+            </div>
+            <input type="checkbox" id="setLiteMode" class="switch" />
+          </div>
+          <div class="field">
+            <label>Prioridad de la máquina virtual</label>
+            <select id="setPriorityMode">
+              <option value="balanced">Equilibrada (recomendado) · el runtime cede ante la ventana en primer plano</option>
+              <option value="performance">Rendimiento · el runtime tiene la misma prioridad que el primer plano</option>
+              <option value="game">Juegos / baja latencia · runtime con prioridad alta, ideal para FPS y juegos de ritmo</option>
+            </select>
+            <span class="sub">El modo juego mantiene la máquina virtual Android con prioridad alta de CPU y reduce los sondeos del equipo, con la menor latencia de entrada e imagen; a cambio, el resto de programas irá más lento. Sin ventanas de apps, el contenedor sigue bajando de prioridad automáticamente.</span>
+          </div>
+        </details>
+        <div class="field switch-field">
+          <div>
+            <label>Recorte profundo de procesos del sistema</label>
+            <span class="sub">Desactiva además Play Store, el asistente de configuración, los servicios de impresión y otros paquetes en segundo plano, dejando solo lo necesario para abrir apps. Si una app dice que faltan los servicios de Google Play, desactiva esta opción y se restauran automáticamente.</span>
+          </div>
+          <input type="checkbox" id="setDeepTrim" class="switch" />
+        </div>
+        <div class="field switch-field">
+          <div>
+            <label>Precalentamiento al iniciar (recomendado)</label>
+            <span class="sub">Al abrir Lanzador APK, Android se prepara en segundo plano (la ventana queda oculta, no verás el emulador). Después cualquier app solo necesita «abrirse»: en pruebas pasó de más de 20 s a casi nada. A cambio, en reposo ocupa cerca de 1 GB de memoria; si lo desactivas, la primera app hará un arranque en frío.</span>
+          </div>
+          <input type="checkbox" id="setPrewarm" class="switch" />
+        </div>
+        <div class="field">
+          <span class="sub">Android arranca una sola vez y se queda cargado; después, abrir una app no vuelve a iniciar todo el sistema, solo esa app, y detiene los procesos de las demás. Al cerrar la última ventana se limpia el segundo plano y el contenedor queda en reposo; la próxima vez abre al instante.</span>
+        </div>
+      </div>
+
+      <div class="group" id="downloadGroup" data-cat="net">
+        <div class="group-title">Fuentes de descarga y actualización</div>
+        <div class="field">
+          <label>Prefijo de espejo de descarga (opcional, avanzado)</label>
+          <input id="setMirrorPrefix" type="text" placeholder="https://mirror.example.com/" />
+          <span class="sub">Solo si tu red bloquea GitHub: escribe aquí el prefijo de un espejo de confianza y el descargador lo antepone a la dirección real. Por defecto se descarga solo desde GitHub. Las sumas SHA-256 se verifican siempre contra GitHub, así que un espejo no puede cambiar el archivo.</span>
+        </div>
+        <div class="field">
+          <label>Conexiones de descarga (1–16, por defecto 8)</label>
+          <input id="setConnections" type="number" min="1" max="16" step="1" />
+          <span class="sub">Los archivos grandes se descargan en bloques en paralelo. Con 8 conexiones ya se aprovecha casi cualquier conexión doméstica; si tu red es estable puedes probar 16.</span>
+        </div>
+      </div>
+
+      <div class="group" id="preflightGroup" data-cat="diag">
+        <div class="group-title">Diagnóstico del equipo · configuración automática</div>
+        <div class="field">
+          <span class="sub">Revisa primero este equipo: si la virtualización de la CPU está activada, si existe la Plataforma del hipervisor de Windows, qué tarjeta gráfica y cuánta memoria de video hay, y si la memoria y la versión de Windows bastan. Lo que se puede ajustar solo (memoria / núcleos / calidad / motor de renderizado) se guarda directamente en la configuración y el resultado se fija como un controlador; lo que requiere administrador tiene un botón; lo que solo se cambia en la BIOS te dice cómo hacerlo.</span>
+        </div>
+        <div class="field">
+          <div class="row">
+            <button class="btn primary sm" id="btnPreflight">Iniciar diagnóstico</button>
+            <button class="btn ghost sm" id="btnPreflightApply" hidden>Aplicar configuración recomendada</button>
+          </div>
+        </div>
+        <div id="preflightList" class="drv-list"></div>
+        <div class="field">
+          <span class="sub" id="preflightSummary"></span>
+        </div>
+      </div>
+
+      <div class="group" id="driverGroup" data-cat="diag">
+        <div class="group-title">Controladores · parches de compatibilidad</div>
+        <div class="field">
+          <span class="sub">Algunos equipos necesitan otros parámetros de arranque para funcionar (GPU antigua con GLES viejo, sin aceleración por hardware, o un controlador que falla con el renderizado por hardware). Un controlador es un JSON que declara «a qué equipos aplica» + «qué parámetros de arranque cambia». Puedes escribirlo, importarlo y compartirlo. Los controladores solo cambian opciones de una lista permitida, <b>no ejecutan código</b>; si no coinciden, no se aplican.</span>
+        </div>
+        <div class="field">
+          <span class="sub" id="drvSummary">Leyendo controladores…</span>
+        </div>
+        <div id="drvList" class="drv-list"></div>
+        <div class="field">
+          <div class="row">
+            <button class="btn ghost sm" id="btnDrvReload">Actualizar</button>
+            <button class="btn ghost sm" id="btnDrvImport">Importar controlador…</button>
+            <button class="btn ghost sm" id="btnDrvFolder">Abrir carpeta de controladores</button>
+            <button class="btn ghost sm" id="btnDrvExport">Exportar plantilla de este equipo</button>
+          </div>
+          <span class="sub">«Exportar plantilla de este equipo» completa las condiciones de coincidencia para este equipo; edita <code>effect</code> en
+            <code>gpuMode</code> / <code>forceTcg</code> y listo. Los campos se explican en <code>docs/drivers.md</code> del repositorio.</span>
+        </div>
+      </div>
+
+      <div class="group" id="autodebugGroup" data-cat="diag">
+        <div class="group-title">Comprobación automática · diagnóstico inteligente</div>
+        <div class="field">
+          <span class="sub">Revisa periódicamente este equipo en segundo plano: si el runtime de Android arrancó, si la autorización de adb está bien, cuánto disco queda, si el disco diferencial bloquea la partición de datos, si las instantáneas están dañadas y si hay opciones de configuración que se contradicen. Solo muestra una notificación cuando aparece un problema grave <b>nuevo</b>; el resto se lista aquí abajo sin molestar.</span>
+        </div>
+        <div class="field switch-field">
+          <div>
+            <label>Activar comprobación automática (activada por defecto)</label>
+            <span class="sub">Al desactivarla ya no se revisa periódicamente; puedes pulsar «Comprobar ahora» cuando quieras.</span>
+          </div>
+          <input type="checkbox" id="setAutodebugAuto" class="switch" />
+        </div>
+        <div class="field two">
+          <div>
+            <label>Intervalo de comprobación</label>
+            <select id="setAutodebugInterval">
+              <option value="1">Cada minuto</option>
+              <option value="5">Cada 5 minutos</option>
+              <option value="10">Cada 10 minutos (recomendado)</option>
+              <option value="30">Cada 30 minutos</option>
+              <option value="60">Cada hora</option>
+            </select>
+          </div>
+          <div class="switch-field" style="align-items:center">
+            <div>
+              <label>Avisarme cuando aparezcan problemas nuevos</label>
+              <span class="sub">Solo notifica problemas graves; los ya conocidos no vuelven a molestar.</span>
+            </div>
+            <input type="checkbox" id="setAutodebugNotify" class="switch" />
+          </div>
+        </div>
+        <div class="runtime-actions">
+          <button class="btn primary sm" id="btnAutodebugRun">Comprobar ahora</button>
+          <button class="btn ghost sm" id="btnAutodebugReport">Exportar informe de diagnóstico</button>
+          <span class="inline-note" id="autodebugStateText">Sin comprobar</span>
+        </div>
+        <div id="autodebugList" class="dbg-list"></div>
+      </div>
+
+      <details class="advanced-group" data-cat="perf">
+        <summary>Parámetros avanzados (normalmente no hace falta cambiarlos)</summary>
+      <div class="group" data-cat="perf">
+        <div class="group-title">Runtime</div>
+        <div class="field">
+          <label>Runtime</label>
+          <div class="row">
+            <input id="setEngineLabel" type="text" readonly value="Runtime integrado de Lanzador APK (QEMU + Android 14, independiente)" />
+          </div>
+          <span class="sub">Lanzador APK solo usa su propio runtime: adb, emulator y la imagen del sistema los descarga y gestiona él mismo; no detecta, no toma el control ni depende de ningún emulador instalado en tu equipo (no usa BlueStacks, MuMu, LDPlayer ni WSA). Así, cambiar de equipo o actualizar otros emuladores no afecta nada aquí.</span>
+        </div>
+        <div class="field">
+          <label>Ruta de adb</label>
+          <input id="setAdbPath" type="text" placeholder="Si se deja vacía, se busca automáticamente en PATH / Android SDK" />
+        </div>
+        <div class="field">
+          <label>Dirección del dispositivo</label>
+          <span class="sub" id="deviceAddrNote">La asigna Lanzador APK (emulator-5554; si el puerto está ocupado, usa el siguiente); no hace falta escribirla.</span>
+        </div>
+        <div class="field">
+          <label>Imagen del sistema (ISO)</label>
+          <input id="setSystemImage" type="text" placeholder="Ruta de la ISO o IMG de Android-x86 / Bliss OS; vacía para usar la ubicación por defecto" />
+        </div>
+        <div class="field two">
+          <div>
+            <label>Memoria (MB, 0 = automático)</label>
+            <input id="setMemory" type="number" min="0" step="512" />
+          </div>
+          <div>
+            <label>Núcleos de CPU (0 = automático)</label>
+            <input id="setCores" type="number" min="0" max="16" />
+          </div>
+        </div>
+        <div class="field">
+          <span class="sub" id="builtinResNote"></span>
+        </div>
+        <div class="field">
+          <label>Liberar en reposo (minutos, 0 = nunca)</label>
+          <input id="setIdle" type="number" min="0" step="1" />
+        </div>
+        <div class="field switch-field">
+          <div>
+            <label>Imagen compatible universal (gestionada automáticamente)</label>
+            <span class="sub">Ahora hay una sola imagen universal de Android 14 que ejecuta apps x86 y ARM; se descarga sola la primera vez que instales una app ARM, sin cambiar nada a mano. Este interruptor solo existe por compatibilidad con configuraciones antiguas.</span>
+          </div>
+          <input type="checkbox" id="setCompat" class="switch" />
+        </div>
+        <div class="field" id="compatInstallField" hidden>
+          <label>Imagen compatible</label>
+          <div class="row">
+            <span class="inline-note" id="compatImgStatus">No descargada</span>
+            <button class="btn ghost sm" id="btnInstallPlay">Descargar imagen compatible</button>
+          </div>
+        </div>
+        <div class="runtime-actions">
+          <button class="btn ghost sm" id="btnRuntimeStart">Iniciar runtime</button>
+          <button class="btn ghost sm" id="btnRuntimeStop">Detener máquina virtual integrada</button>
+          <span class="inline-note" id="probeResult"></span>
+        </div>
+      </div>
+      </details>
+
+      <div class="group" data-cat="display">
+        <div class="group-title">Ajustes del sistema Android (sin entrar al escritorio de Android)</div>
+        <div class="field">
+          <label>Estado</label>
+          <div class="row">
+            <span class="inline-note" id="androidStatus">Runtime no iniciado</span>
+            <button class="btn ghost sm" id="btnAndroidRefresh">Actualizar</button>
+            <button class="btn ghost sm" id="btnAndroidTune">Optimización de fluidez con un clic</button>
+          </div>
+          <span class="sub">Desactiva las animaciones del sistema, sube el límite de procesos en segundo plano y agrega la app actual a la lista blanca de batería; se nota sobre todo en equipos modestos.</span>
+        </div>
+        <div class="field switch-field">
+          <div>
+            <label>Wi-Fi</label>
+            <span class="sub">Wi-Fi interno de la máquina virtual Android; desactivarlo ahorra algo de CPU.</span>
+          </div>
+          <input type="checkbox" id="setAndroidWifi" class="switch" />
+        </div>
+        <div class="field switch-field">
+          <div>
+            <label>Modo avión</label>
+            <span class="sub">Corta toda la red (incluidos datos móviles); actívalo cuando necesites tranquilidad.</span>
+          </div>
+          <input type="checkbox" id="setAndroidAirplane" class="switch" />
+        </div>
+        <div class="field switch-field">
+          <div>
+            <label>Animaciones del sistema</label>
+            <span class="sub">Al desactivarlas, la interfaz cambia mucho más rápido; las funciones no se ven afectadas.</span>
+          </div>
+          <input type="checkbox" id="setAndroidAnim" class="switch" />
+        </div>
+        <div class="field">
+          <label>Volumen multimedia</label>
+          <div class="row">
+            <input type="range" id="setAndroidVolume" min="0" max="100" step="1" style="flex:1" />
+            <span class="inline-note" id="androidVolumeText">—</span>
+          </div>
+        </div>
+        <div class="field two">
+          <div>
+            <label>Tamaño de fuente</label>
+            <select id="setAndroidFont">
+              <option value="0.85">Pequeño</option>
+              <option value="1.00">Normal</option>
+              <option value="1.15">Grande</option>
+              <option value="1.30">Muy grande</option>
+            </select>
+          </div>
+          <div>
+            <label>Tamaño de pantalla</label>
+            <select id="setAndroidDensity">
+              <option value="240">Compacto (ahorra recursos)</option>
+              <option value="320">Normal</option>
+              <option value="420">Amplio</option>
+              <option value="480">Muy grande</option>
+            </select>
+          </div>
+        </div>
+        <div class="runtime-actions">
+          <button class="btn ghost sm" id="btnAndroidSettings">Ajustes nativos de Android</button>
+          <button class="btn ghost sm" id="btnAndroidDisplay">Ajustes de pantalla</button>
+          <button class="btn ghost sm" id="btnAndroidSound">Ajustes de sonido</button>
+          <button class="btn ghost sm" id="btnAndroidLocale">Ajustes de idioma</button>
+          <button class="btn ghost sm" id="btnAndroidApps">Administrar apps</button>
+        </div>
+      </div>
+
+      <div class="group" data-cat="files">
+        <div class="group-title">Escritorio y apps</div>
+        <div class="field switch-field">
+          <div>
+            <label>Crear acceso directo en el escritorio al instalar</label>
+            <span class="sub">El acceso directo usa el icono real de la app; con doble clic entra directo a la app</span>
+          </div>
+          <input type="checkbox" id="setAutoShortcut" class="switch" />
+        </div>
+        <div class="field switch-field">
+          <div>
+            <label>Agregar también al menú Inicio</label>
+            <span class="sub">La búsqueda de Windows encuentra la app por su nombre y la barra de tareas agrupa por app</span>
+          </div>
+          <input type="checkbox" id="setStartMenuShortcut" class="switch" />
+        </div>
+        <div class="field">
+          <label>Carpeta de accesos directos</label>
+          <input id="setShortcutDir" type="text" placeholder="Vacío = escritorio" />
+        </div>
+        <div class="runtime-actions">
+          <button class="btn ghost sm" id="btnRebuildShortcuts">Recrear accesos directos</button>
+          <span class="inline-note">Si se borraron iconos del escritorio por error o los bloqueó un programa de seguridad, pulsa aquí para recrearlos todos según la configuración actual.</span>
+        </div>
+      </div>
+
+      <div class="group" data-cat="files">
+        <div class="group-title">Compartir archivos</div>
+        <div class="field">
+          <label>Carpeta compartida de este equipo</label>
+          <div class="row">
+            <input id="setSharedDir" type="text" />
+            <button class="btn ghost sm" id="btnBrowseShared">Examinar</button>
+            <button class="btn ghost sm" id="btnOpenShared">Abrir</button>
+            <button class="btn ghost sm" id="btnSyncShared">Sincronizar ahora</button>
+            <button class="btn primary sm" id="btnSaveShared">Guardar y migrar</button>
+          </div>
+          <span class="sub">Al cambiarla, los archivos de la carpeta anterior se mueven solos a la nueva; la sincronización en curso no se ve afectada.</span>
+        </div>
+        <div class="field">
+          <label>Carpeta correspondiente en Android</label>
+          <input id="setDeviceSharedDir" type="text" placeholder="/sdcard/LanzadorAPKShared" />
+        </div>
+        <p class="note">Ambas carpetas se sincronizan continuamente en los dos sentidos; lo que guardes en esa carpeta desde una app de Android aparecerá en la carpeta compartida de este equipo.</p>
+      </div>
+
+      <div class="group" data-cat="files">
+        <div class="group-title">Integración con el sistema</div>
+        <div class="field switch-field">
+          <div>
+            <label>Asociar archivos .apk</label>
+            <span class="sub">Doble clic en un APK para instalarlo en Lanzador APK (solo para el usuario actual, sin administrador)</span>
+          </div>
+          <button class="btn ghost sm" id="btnAssoc">Comprobando…</button>
+        </div>
+        <div class="field">
+          <label>Carpeta de datos del runtime (imagen del sistema · apps instaladas · instantáneas)</label>
+          <div class="row">
+            <input id="setRuntimeDir" type="text" readonly placeholder="Por defecto: carpeta de datos del usuario en el disco C" />
+            <button class="btn ghost sm" id="btnBrowseRuntimeDir">Examinar</button>
+            <button class="btn ghost sm" id="btnOpenData">Abrir</button>
+          </div>
+          <span class="sub">Es lo que más espacio ocupa (varios GB). Moverla a otro disco alivia mucho el disco C; hay que reiniciar el programa y los datos existentes no se mueven solos (cópialos a mano y borra la carpeta antigua).</span>
+        </div>
+        <div class="field">
+          <label>Carpeta de datos de Android (apps, juegos e instantáneas de arranque rápido)</label>
+          <div class="row">
+            <input id="setAvdDir" type="text" readonly placeholder="Por defecto: la carpeta avd dentro de la carpeta del runtime" />
+            <button class="btn ghost sm" id="btnBrowseAvdDir">Examinar</button>
+            <button class="btn ghost sm" id="btnOpenAvdDir">Abrir</button>
+          </div>
+          <span class="sub">Esto es lo que realmente llena el disco: la partición de datos (6 GB por defecto, ampliable arriba) + la instantánea de arranque rápido (unos 2–3 GB). Si te falta espacio, apúntala a otro disco (p. ej. D:); se aplica al reiniciar el programa. La carpeta <code>lanzadorapk.avd</code> de la ubicación anterior se puede mover entera y luego borrar.</span>
+        </div>
+        <div class="field">
+          <label>Desinstalar Lanzador APK</label>
+          <div class="row">
+            <button class="btn ghost sm" id="btnUninstall">Desinstalar</button>
+            <span class="inline-note">Al desinstalar se quita la asociación de .apk y se elimina el programa; en la versión portátil, borra la carpeta manualmente según las indicaciones.</span>
+          </div>
+        </div>
+      </div>
+      <div class="group" id="updateGroup" data-cat="about">
+        <div class="group-title">Actualizaciones</div>
+        <div class="field">
+          <label>Versión actual <span class="inline-note" id="updateCurrent">—</span></label>
+          <div class="row">
+            <span class="inline-note" id="updateState">Sin comprobar</span>
+            <span style="flex:1"></span>
+            <button class="btn ghost sm" id="btnCheckUpdate">Buscar actualizaciones</button>
+            <button class="btn primary sm" id="btnDoUpdate" style="display:none" hidden>Actualizar ahora</button>
+          </div>
+          <div class="update-bar" id="updateBar" hidden><i id="updateBarFill"></i></div>
+          <span class="sub" id="updateNote">
+            Obtiene la última versión desde GitHub y verifica su suma SHA-256 antes de instalarla; la versión portátil descarga el paquete y reemplaza los archivos del programa sin tocar el runtime, las apps instaladas ni las instantáneas.
+          </span>
+        </div>
+      </div>
+
+      <div class="group" id="aboutGroup" data-cat="about">
+        <div class="group-title">Acerca de</div>
+        <div class="about-box">
+          <div class="about-brand">
+            <img class="about-logo" src="assets/logo.png" alt="Lanzador APK Logo" draggable="false" />
+          </div>
+          <div class="about-info">
+            <div class="about-name">Lanzador APK <span class="about-ver" id="aboutVer"></span></div>
+            <p class="note">Ejecutor de apps Android para Windows que instala con doble clic: instalación de APK, accesos directos en el escritorio, ventanas independientes y archivos compartidos en ambos sentidos.</p>
+            <div class="about-links">
+              <a href="https://github.com/zaiddia/Lanzador-APK" target="_blank" rel="noopener">GitHub · zaiddia/Lanzador-APK</a>
+              <span class="powered">Powered by <b>zaiddia</b></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </div>
+    <footer class="modal-foot">
+      <span class="inline-note">Los cambios se aplican al instante</span>
+      <button class="btn primary" id="btnDoneSettings">Finalizar</button>
+    </footer>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

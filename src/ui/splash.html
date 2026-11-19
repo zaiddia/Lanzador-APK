@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' file: data:; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+<title>Lanzador APK</title>
+<link rel="stylesheet" href="splash.css" />
+</head>
+<body>
+<div class="splash" id="splash">
+  <!-- Logo 区域 -->
+  <div class="logo-wrap">
+    <img class="logo" id="logo" src="assets/logo.png" alt="Lanzador APK" draggable="false" />
+    <div class="brand">Lanzador APK</div>
+    <div class="tagline">Ejecutor de apps Android para Windows</div>
+  </div>
+
+  <!-- 进度条 -->
+  <div class="progress-wrap">
+    <div class="progress-bar" id="progressBar"></div>
+  </div>
+
+  <!-- 状态文字 -->
+  <div class="status" id="status">Preparando…</div>
+
+  <!-- 首次安装提示（默认隐藏，由主进程控制显示） -->
+  <div class="first-run" id="firstRun" hidden>
+    <div class="first-run-title" id="firstRunTitle">Primer uso · configurando automáticamente</div>
+    <ul class="first-run-list" id="firstRunList">
+      <li>Descargando el motor del runtime de Android (unos 200 MB, solo una vez)</li>
+      <li>Descargando la imagen del sistema (unos 1,5 GB, solo una vez)</li>
+      <li>Configurando la aceleración por hardware y la red</li>
+      <li>Al terminar, haz doble clic en un APK o en un icono del escritorio para abrir la app al instante</li>
+    </ul>
+  </div>
+
+  <!-- 底部版权 -->
+  <div class="footer">Powered by zaiddia · v<span id="ver"></span></div>
+</div>
+
+<script src="splash.js"></script>
+</body>
+</html>

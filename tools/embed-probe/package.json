@@ -1,0 +1,7 @@
+{
+  "name": "lanzadorapk-embed-probe",
+  "productName": "LanzadorAPK Embed Probe",
+  "version": "0.0.1",
+  "private": true,
+  "main": "index.js"
+}
