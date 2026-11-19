@@ -47,19 +47,19 @@ async function run(appRoot) {
   const { WinAgent } = require(path.join(appRoot, 'src', 'core', 'agent'));
 
   const Cls = backends.byId(backendId);
-  if (!Cls) { log(`未知后端 ${backendId}`); return; }
+  if (!Cls) { log(`Backend desconocido ${backendId}`); return; }
   const backend = new Cls(appRoot, { runtime: null, store: null, log });
 
   log(`probe ${backendId} …`);
   const probe = await backend.probe();
   log(`probe → ${JSON.stringify(probe)}`);
-  if (!probe.found) { log('没有找到这个后端'); return; }
+  if (!probe.found) { log('No se encontró este backend'); return; }
 
   log('ensure() …');
   const t0 = Date.now();
   const ens = await backend.ensure({ onLog: (m) => log(`  ${m}`) });
   log(`ensure → ok=${ens.ok} serial=${ens.serial} reused=${ens.reused} (${Date.now() - t0}ms)`);
-  if (!ens.ok) { log(`失败：${ens.error}`); return; }
+  if (!ens.ok) { log(`Error: ${ens.error}`); return; }
 
   const win = new BrowserWindow({
     width: 560,
@@ -82,7 +82,7 @@ async function run(appRoot) {
 
   const targets = await backend.windowTargets().catch(() => []);
   log(`targets → ${JSON.stringify(targets)}`);
-  if (!targets.length) { log('拿不到窗口句柄，结束'); return; }
+  if (!targets.length) { log('No se obtuvo el identificador de la ventana; fin'); return; }
 
   const buf = win.getNativeWindowHandle();
   const hwnd = buf.length >= 8 ? buf.readBigUInt64LE(0) : BigInt(buf.readUInt32LE(0));
@@ -97,7 +97,7 @@ async function run(appRoot) {
   const png = img.toPNG();
   const out = path.join(outDir(), `embed-probe-${backendId}.png`);
   fs.writeFileSync(out, png);
-  log(`截图 → ${out} (${png.length} bytes)`);
+  log(`Captura → ${out} (${png.length} bytes)`);
 
   await agent.park().catch(() => {});
   agent.dispose();

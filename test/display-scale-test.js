@@ -29,83 +29,83 @@ function test(name, fn) {
 }
 
 (() => {
-  console.log('\n[issue #99 · DIP → 物理像素换算]');
+  console.log('\n[issue #99 · conversión DIP → píxeles físicos]');
 
-  test('100% 缩放：矩形原样返回（同一对象，零开销）', () => {
+  test('Escala 100 %: el rectángulo se devuelve tal cual (el mismo objeto, sin coste)', () => {
     const r = { x: 100, y: 60, w: 1280, h: 720 };
-    assert.equal(physicalRect(r, 1), r, 'sf=1 应直接返回原对象');
-    assert.equal(physicalRect(r, 0), r, 'sf 缺失回退也不改');
+    assert.equal(physicalRect(r, 1), r, 'Con sf=1 debe devolver el objeto original');
+    assert.equal(physicalRect(r, 0), r, 'Sin sf tampoco cambia');
   });
 
-  test('150% 缩放：宽高与坐标一起放大，四舍五入', () => {
+  test('Escala 150 %: tamaño y coordenadas se amplían juntos, con redondeo', () => {
     assert.deepEqual(physicalRect({ x: 100, y: 60, w: 1280, h: 720 }, 1.5),
       { x: 150, y: 90, w: 1920, h: 1080 });
   });
 
-  test('125% 缩放：出现小数时按最近整数取整', () => {
+  test('Escala 125 %: con decimales se redondea al entero más cercano', () => {
     assert.deepEqual(physicalRect({ x: 33, y: 41, w: 1001, h: 777 }, 1.25),
       { x: Math.round(33 * 1.25), y: Math.round(41 * 1.25), w: Math.round(1001 * 1.25), h: Math.round(777 * 1.25) });
   });
 
-  test('负坐标（-8 灰边溢出）同样按比例换算，不丢符号', () => {
+  test('Las coordenadas negativas (-8 por el borde gris) también se convierten en proporción, sin perder el signo', () => {
     assert.deepEqual(physicalRect({ x: -8, y: 30 - 8, w: 900, h: 500 }, 2),
       { x: -16, y: 44, w: 1800, h: 1000 });
   });
 
-  test('全屏铺满：workArea DIP × sf = 物理分辨率', () => {
+  test('Pantalla completa: workArea DIP × sf = resolución física', () => {
     // Con escala 150 %, una pantalla física de 1920×1080 tiene un workArea de unos 1280×693 DIP
     const phys = physicalRect({ x: 0, y: 0, w: 1280, h: 693 }, 1.5);
     assert.equal(phys.w, 1920);
     assert.equal(phys.h, Math.round(693 * 1.5)); // ≈ 1040, deja sitio para la barra de tareas
   });
 
-  console.log('\n[源码级 · 独立窗口模式所有 layout 都接入换算]');
+  console.log('\n[A nivel de código · todos los layout del modo independiente usan la conversión]');
   const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'core', 'appwin.js'), 'utf8');
 
-  test('appwin._physical 委托给零依赖的 geometry.physicalRect', () => {
-    assert(/require\('\.\/geometry'\)/.test(src), 'appwin 应引入 geometry');
+  test('appwin._physical delega en geometry.physicalRect, sin dependencias', () => {
+    assert(/require\('\.\/geometry'\)/.test(src), 'appwin debería importar geometry');
     const start = src.indexOf('_physical(rect, sf) {');
     const body = src.slice(start, start + 200);
-    assert(/physicalRect\(rect/.test(body), '_physical 必须调用 physicalRect（测的才是真实实现）');
+    assert(/physicalRect\(rect/.test(body), '_physical debe llamar a physicalRect (así se prueba la implementación real)');
   });
 
-  test('_area() 返回 sf，且与 area 取自同一块屏幕', () => {
+  test('_area() devuelve sf, tomado de la misma pantalla que area', () => {
     const fn = src.slice(src.indexOf('_area() {'), src.indexOf('_scale() {'));
-    assert(/scaleFactor/.test(fn), '_area 必须记录 scaleFactor');
-    assert(/return \{[^}]*sf:/s.test(fn), '_area 返回值要带 sf 字段');
+    assert(/scaleFactor/.test(fn), '_area debe registrar scaleFactor');
+    assert(/return \{[^}]*sf:/s.test(fn), 'El valor que devuelve _area debe incluir el campo sf');
   });
 
-  test('openDetached 的 layout 经过 _physical', () => {
+  test('El layout de openDetached pasa por _physical', () => {
     const start = src.indexOf('async openDetached(');
     const body = src.slice(start, src.indexOf('async embed(', start));
     assert(/agent\.layout\(this\._physical\(/.test(body),
-      'openDetached 里交给 agent.layout 的矩形必须先 _physical');
+      'En openDetached el rectángulo que se pasa a agent.layout debe pasar antes por _physical');
   });
 
-  test('toggleMaximize 的全屏 layout 经过 _physical', () => {
+  test('El layout de pantalla completa de toggleMaximize pasa por _physical', () => {
     const start = src.indexOf('async toggleMaximize()');
     const body = src.slice(start, src.indexOf('openDetachedLayoutOnly(area) {'));
     assert(/agent\.layout\(this\._physical\(/.test(body),
-      '独立模式全屏也要换算');
+      'La pantalla completa en modo independiente también debe convertirse');
     // La ruta de restauración usa los píxeles físicos que devuelve probe; nunca se puede multiplicar otra vez
     assert(/agent\.layout\(this\._preFullscreenRect\)/.test(body),
-      '从 probe 拿到的物理矩形还原时不能重复换算');
+      'Al restaurar con el rectángulo físico obtenido de probe no se puede convertir dos veces');
   });
 
-  test('openDetachedLayoutOnly 的 layout 经过 _physical', () => {
+  test('El layout de openDetachedLayoutOnly pasa por _physical', () => {
     const start = src.indexOf('openDetachedLayoutOnly(area) {');
     const body = src.slice(start, start + 600);
     assert(/agent\.layout\(this\._physical\(/.test(body),
-      '还原到默认尺寸的路径也要换算');
+      'La ruta que restaura el tamaño por defecto también debe convertir');
   });
 
-  test('嵌入模式 _rect() 仍保留自己的 sf 换算（未被本次改动破坏）', () => {
+  test('En modo incrustado _rect() conserva su propia conversión sf (este cambio no la rompió)', () => {
     const start = src.indexOf('_rect() {');
     const body = src.slice(start, start + 500);
     assert(/this\._scale\(\)/.test(body) && /\* sf/.test(body),
-      '嵌入模式的物理换算必须保留');
+      'La conversión física del modo incrustado debe conservarse');
   });
 
-  console.log(`\n结果：${passed} 通过，${failed} 失败\n`);
+  console.log(`\nResultado: ${passed} correctas, ${failed} fallidas\n`);
   process.exit(failed ? 1 : 0);
 })();

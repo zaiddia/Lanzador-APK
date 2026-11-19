@@ -39,25 +39,25 @@ function copy(src, dest) {
   }
 }
 
-console.log(FULL ? '打包完整版（含运行时）→' : '打包便携版 →', OUT);
+console.log(FULL ? 'Empaquetando la versión completa (con runtime) →' : 'Empaquetando la versión portátil →', OUT);
 // Si el destino existe no se borra entero: algunos entornos bloquean borrados masivos y si el empaquetado falla a mitad se pierde
 // la última versión útil. Se renombra la carpeta antigua para conservarla y se compila desde cero; si está en uso se cambia de carpeta.
 if (fs.existsSync(OUT)) {
   try {
     const backup = `${OUT}.prev-${new Date().toISOString().replace(/[:.]/g, '-')}`;
     fs.renameSync(OUT, backup);
-    console.log('旧版本已保留 →', backup);
+    console.log('Versión anterior conservada →', backup);
   } catch (_) {
     // Algunos entornos (antivirus / indexador / Explorador) retienen el identificador de la carpeta mucho tiempo,
     // y renombrarla da EBUSY; entonces se usa una carpeta con número de versión: el resultado sirve igual y no choca de nombre.
     OUT = path.join(ROOT, 'dist', `LanzadorAPK-v${require(path.join(ROOT, 'package.json')).version}-win64-portable`);
-    console.log('旧目录被占用，改输出到 →', OUT);
+    console.log('La carpeta anterior está en uso; la salida va a →', OUT);
   }
 }
 fs.mkdirSync(path.join(OUT, 'resources', 'app'), { recursive: true });
 
 // 1. Runtime de Electron
-console.log('复制 Electron 运行时…');
+console.log('Copiando el runtime de Electron…');
 copy(ELECTRON_DIST, OUT);
 fs.rmSync(path.join(OUT, 'resources', 'default_app.asar'), { force: true });
 
@@ -96,7 +96,7 @@ for (const rel of ['d3dcompiler_47.dll']) {
 
 // 2. La app
 // assets/ (si existe) contiene recursos que se distribuyen con la app.
-console.log('复制应用…');
+console.log('Copiando la app…');
 const appDir = path.join(OUT, 'resources', 'app');
 for (const item of ['package.json', 'src', 'assets', 'LICENSE']) {
   const src = path.join(ROOT, item);
@@ -112,7 +112,7 @@ for (const item of ['package.json', 'src', 'assets', 'LICENSE']) {
 // suelen estar como optionalDependency en el mismo ámbito (p. ej. @napi-rs/lzma-win32-x64-msvc).
 const prodDeps = Object.keys((require(path.join(ROOT, 'package.json')).dependencies) || {});
 if (prodDeps.length) {
-  console.log(`复制生产依赖（${prodDeps.length}）：${prodDeps.join(', ')}`);
+  console.log(`Copiando dependencias de producción (${prodDeps.length}): ${prodDeps.join(', ')}`);
   const destModules = path.join(appDir, 'node_modules');
   for (const dep of prodDeps) {
     if (dep.startsWith('@')) {
@@ -147,11 +147,11 @@ if (FULL) {
   const runtime = path.join(ROOT, 'build', 'runtime');
   const runtimeExe = path.join(runtime, 'emulator', 'emulator.exe');
   if (!fs.existsSync(runtimeExe)) {
-    console.error('\n[!] 找不到 build/runtime/emulator/emulator.exe。');
-    console.error('    先跑 node build/prepare-runtime.js（npm run runtime）生成运行时，再打完整版。\n');
+    console.error('\n[!] No se encuentra build/runtime/emulator/emulator.exe.');
+    console.error('    Ejecuta primero node build/prepare-runtime.js (npm run runtime) para generar el runtime y luego empaqueta la versión completa.\n');
     process.exit(1);
   }
-  console.log('内置运行时（约 1 GB，需要一会儿）…');
+  console.log('Incluyendo el runtime (alrededor de 1 GB, tarda un poco)…');
   // La carpeta del runtime puede tener restos de desarrollo: userdata.img.broken (de una descompresión fallida),
   // *.part (descompresión interrumpida), *.new (temporal de una recompresión). Ocupan espacio y no sirven,
   // e incluso podrían meter una imagen dañada en la versión publicada; se omiten, no se copian.
@@ -174,8 +174,8 @@ if (FULL) {
         fs.readSync(fd, tail, 0, n, size - n);
       } finally { fs.closeSync(fd); }
       if (!tail.includes(Buffer.from('YZ'))) {
-        console.error(`\n[!] 镜像不完整（缺 xz footer，多半是下载被截断）：${p}`);
-        console.error(`    大小 ${(size / 1048576).toFixed(1)} MB。请重新获取该镜像后再打包。\n`);
+        console.error(`\n[!] Imagen incompleta (le falta el pie xz; probablemente la descarga se cortó): ${p}`);
+        console.error(`    tamaño ${(size / 1048576).toFixed(1)} MB. Vuelve a obtener la imagen y empaqueta de nuevo.\n`);
         process.exit(1);
       }
     }
@@ -201,7 +201,7 @@ if (FULL) {
 
 // 3.6 Vigilante de independencia: el resultado no puede contener MuMu / LDPlayer / BlueStacks u otros emuladores de terceros.
 // Si hay coincidencia la compilación falla: estos problemas solo aparecen «en el equipo de otro» y localmente nunca se detectan.
-assertStandalone(path.join(OUT, 'resources'), { label: '便携版 resources' });
+assertStandalone(path.join(OUT, 'resources'), { label: 'resources de la versión portátil' });
 
 // 4. Renombrar el ejecutable principal
 const exePath = path.join(OUT, 'LanzadorAPK.exe');
@@ -225,12 +225,12 @@ function embedExeMeta(exe) {
     path.join(ROOT, 'node_modules', 'rcedit', 'bin', 'rcedit-x64.exe'),
   ].find((p) => fs.existsSync(p));
   if (!rcedit) {
-    console.warn('  [!] 找不到 rcedit.exe，exe 图标/版本信息保持 Electron 默认值');
+    console.warn('  [!] No se encuentra rcedit.exe; el icono y la información de versión del exe quedan con los valores de Electron');
     return false;
   }
   const ico = path.join(ROOT, 'src', 'ui', 'assets', 'appicon.ico');
   if (!fs.existsSync(ico)) {
-    console.warn(`  [!] 找不到 ${ico}，跳过图标写入`);
+    console.warn(`  [!] No se encuentra ${ico}; se omite el icono`);
     return false;
   }
   const args = [
@@ -248,10 +248,10 @@ function embedExeMeta(exe) {
   ];
   try {
     execFileSync(rcedit, args, { stdio: 'pipe', windowsHide: true });
-    console.log(`  exe 图标/版本已写入（${PKG.version}，FileDescription=LanzadorAPK — Ejecutor de apps Android）`);
+    console.log(`  icono/versión del exe escritos (${PKG.version}, FileDescription=LanzadorAPK — Ejecutor de apps Android)`);
     return true;
   } catch (e) {
-    console.warn(`  [!] rcedit 失败：${e.message}`);
+    console.warn(`  [!] rcedit falló: ${e.message}`);
     return false;
   }
 }
@@ -259,9 +259,9 @@ embedExeMeta(exePath);
 
 // 5. Información de versión
 const pkg = PKG;
-const fullNote = FULL ? '完整版（内置运行时，装完不联网）' : '轻量版（首次启动下载运行时）';
+const fullNote = FULL ? 'Versión completa (runtime incluido, no necesita internet tras instalar)' : 'Versión ligera (descarga el runtime en el primer inicio)';
 fs.writeFileSync(path.join(OUT, 'VERSION.txt'),
-  `LanzadorAPK ${pkg.version}\n${fullNote}\n构建时间：${new Date().toLocaleString('es')}\n`);
+  `LanzadorAPK ${pkg.version}\n${fullNote}\nCompilado: ${new Date().toLocaleString('es')}\n`);
 
 // 6. Informe de tamaño: se imprime en cada empaquetado para que no vuelva a crecer sin darnos cuenta
 function dirSize(dir) {
@@ -276,9 +276,9 @@ function dirSize(dir) {
 }
 const totalMB = dirSize(OUT) / 1048576;
 console.log(
-  `完成。整包 ${totalMB.toFixed(0)} MB（语言包省了 ${(localeSaved / 1048576).toFixed(0)} MB，`
-  + `冗余运行库省了 ${(pruneSaved / 1048576).toFixed(1)} MB）。`,
+  `Listo. Paquete completo ${totalMB.toFixed(0)} MB (paquetes de idioma ahorraron ${(localeSaved / 1048576).toFixed(0)} MB, `
+  + `bibliotecas redundantes ahorraron ${(pruneSaved / 1048576).toFixed(1)} MB).`,
 );
-console.log('压缩：node build/zip.js ' + path.relative(ROOT, OUT) + ' <输出.zip>');
-console.log(`运行 ${path.join(OUT, 'LanzadorAPK.exe')} 即可使用。`);
-if (!FULL) console.log('想要「一次下载、装完不联网」的完整版：node build/pack.js --full');
+console.log('Comprimir: node build/zip.js ' + path.relative(ROOT, OUT) + ' <salida.zip>');
+console.log(`Ejecuta ${path.join(OUT, 'LanzadorAPK.exe')} para usarlo.`);
+if (!FULL) console.log('Para la versión completa de «una descarga y sin internet tras instalar»: node build/pack.js --full');

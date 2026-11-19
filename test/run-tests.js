@@ -22,12 +22,12 @@ function test(name, fn) {
 }
 
 function assert(cond, msg) {
-  if (!cond) throw new Error(msg || '断言失败');
+  if (!cond) throw new Error(msg || 'Aserción fallida');
 }
 
 console.log('\n[zip.js]');
 const { ZipArchive } = require('../src/core/zip');
-test('能解析自身所在项目的 package.json 压缩包结构', () => {
+test('Puede analizar la estructura de un zip con el package.json del propio proyecto', () => {
   // Verifica el análisis con un zip mínimo construido en memoria (modo stored)
   const header = Buffer.alloc(30);
   header.writeUInt32LE(0x04034b50, 0);
@@ -55,24 +55,24 @@ test('能解析自身所在项目的 package.json 压缩包结构', () => {
   eocd.writeUInt32LE(30 + name.length + data.length, 16); // Desplazamiento del directorio central
 
   const zip = new ZipArchive(Buffer.concat([header, name, data, cen, name, eocd]));
-  assert(zip.has('hello.txt'), '应能找到 hello.txt');
-  assert(zip.read('hello.txt').toString() === 'hello lanzadorapk', '内容应一致');
+  assert(zip.has('hello.txt'), 'Debería encontrar hello.txt');
+  assert(zip.read('hello.txt').toString() === 'hello lanzadorapk', 'El contenido debería coincidir');
 });
 
 console.log('\n[png.js]');
 const { encodePng, drawAppIcon } = require('../src/core/png');
-test('PNG 编码器输出合法签名与 IHDR', () => {
+test('El codificador PNG produce firma e IHDR válidos', () => {
   const rgba = new Uint8Array(16 * 16 * 4).fill(128);
   const png = encodePng(16, 16, rgba);
-  assert(png[0] === 0x89 && png[1] === 0x50, 'PNG 签名');
+  assert(png[0] === 0x89 && png[1] === 0x50, 'Firma PNG');
   assert(png.toString('ascii', 12, 16) === 'IHDR', 'IHDR chunk');
-  assert(png.length > 50, '长度合理');
+  assert(png.length > 50, 'Longitud razonable');
 });
-test('应用图标可按任意尺寸绘制', () => {
+test('El icono de la app puede dibujarse en cualquier tamaño', () => {
   for (const s of [16, 32, 64, 256]) {
     const png = drawAppIcon(s);
     const w = png.readUInt32BE(16);
-    assert(w === s, `宽度应为 ${s}，实际 ${w}`);
+    assert(w === s, `El ancho debería ser ${s}; real: ${w}`);
   }
 });
 
@@ -99,46 +99,46 @@ function findFixture() {
 
 const fixture = findFixture();
 if (fixture) {
-  console.log(`  （夹具：${fixture}）`);
-  test('quickCheck 识别 PK 头', () => {
+  console.log(`  (APK de prueba: ${fixture})`);
+  test('quickCheck reconoce el encabezado PK', () => {
     assert(quickCheck(fixture) === true);
   });
   const meta = parseApk(fixture);
-  test('解析出包名 / 版本 / 启动 Activity', () => {
-    assert(/^[\w.]+$/.test(meta.package), `包名异常: ${meta.package}`);
-    assert(meta.versionName, '缺少 versionName');
+  test('Obtiene nombre de paquete / versión / Activity de inicio', () => {
+    assert(/^[\w.]+$/.test(meta.package), `Nombre de paquete anómalo: ${meta.package}`);
+    assert(meta.versionName, 'Falta versionName');
     assert(meta.launchActivity && /\./.test(meta.launchActivity),
-      `启动 Activity 异常: ${meta.launchActivity}`);
+      `Activity de inicio anómala: ${meta.launchActivity}`);
   });
-  test('解析出可用图标', () => {
-    assert(meta.iconPng && meta.iconPng.length > 100, '图标为空或过小');
-    assert(meta.label, '应用名为空');
+  test('Obtiene un icono utilizable', () => {
+    assert(meta.iconPng && meta.iconPng.length > 100, 'El icono está vacío o es muy pequeño');
+    assert(meta.label, 'El nombre de la app está vacío');
     console.log(`    ↳ ${meta.label} (${meta.package}) v${meta.versionName}`);
   });
-  test('AXML 根节点是 manifest', () => {
+  test('El nodo raíz AXML es manifest', () => {
     const zip = new ZipArchive(fs.readFileSync(fixture));
     const root = parseAxml(zip.read('AndroidManifest.xml'));
     assert(root.name === 'manifest');
   });
-  test('resources.arsc 可解析', () => {
+  test('resources.arsc se puede analizar', () => {
     const zip = new ZipArchive(fs.readFileSync(fixture));
     if (zip.has('resources.arsc')) {
       const res = new ResTable(zip.read('resources.arsc'));
-      assert(res.packages.length > 0, '应至少有一个 package');
+      assert(res.packages.length > 0, 'Debería haber al menos un package');
     }
   });
 } else {
-  console.log('  （跳过：未找到 APK 夹具，可设置 LANZADORAPK_TEST_APK）');
+  console.log('  (Omitida: no se encontró el APK de prueba; puedes indicar LANZADORAPK_TEST_APK)');
 }
 
 // El constructor de APK sintéticos está en test/lib/make-apk.js: cubre la pila de análisis aunque falten los APK reales,
 // y run-tests / auto-test comparten la misma copia (para no tener dos ensamblados de bytes distintos).
 const { buildApkBytes } = require('./lib/make-apk');
 
-console.log('\n[合成 APK：axml + apk 全链路]');
+console.log('\n[APK sintético: cadena completa axml + apk]');
 {
   const { attrValue, ANDROID_NS } = require('../src/core/axml');
-  test('attrValue 的命名空间语义：传 null = 不限定，默认只认 android', () => {
+  test('Semántica del espacio de nombres de attrValue: null = sin restricción; por defecto solo android', () => {
     const node = {
       attrs: [
         { ns: '', name: 'package', typed: 'com.a.b' },
@@ -146,10 +146,10 @@ console.log('\n[合成 APK：axml + apk 全链路]');
       ],
     };
     // Los atributos sin espacio de nombres (como package) solo se obtienen pasando null; es la condición clave de parseApk
-    assert(attrValue(node, 'package', null) === 'com.a.b', 'package 需要 ns=null');
-    assert(attrValue(node, 'package') === null, '默认只认 android 命名空间');
-    assert(attrValue(node, 'label') === '测试', 'android 属性走默认命名空间');
-    assert(attrValue(node, 'label', null) === '测试', 'ns=null 时应能找到 android 属性');
+    assert(attrValue(node, 'package', null) === 'com.a.b', 'package necesita ns=null');
+    assert(attrValue(node, 'package') === null, 'Por defecto solo reconoce el espacio de nombres android');
+    assert(attrValue(node, 'label') === '测试', 'Los atributos android usan el espacio de nombres por defecto');
+    assert(attrValue(node, 'label', null) === '测试', 'Con ns=null debería encontrar los atributos android');
   });
 }
 {
@@ -157,23 +157,23 @@ console.log('\n[合成 APK：axml + apk 全链路]');
   fs.writeFileSync(tmp, buildApkBytes());
   try {
     const meta = parseApk(tmp);
-    test('包名：manifest 上的 package 是非命名空间属性', () => {
-      assert(meta.package === 'com.example.test', `实际 ${meta.package}`);
+    test('Nombre de paquete: package en manifest es un atributo sin espacio de nombres', () => {
+      assert(meta.package === 'com.example.test', `Real: ${meta.package}`);
     });
-    test('应用名 / 版本 / SDK', () => {
+    test('Nombre de la app / versión / SDK', () => {
       assert(meta.label === 'TestApp', `label=${meta.label}`);
       assert(meta.versionName === '1.2.3', `versionName=${meta.versionName}`);
       assert(meta.versionCode === 7, `versionCode=${meta.versionCode}`);
       assert(meta.minSdk === 21 && meta.targetSdk === 34, `sdk=${meta.minSdk}/${meta.targetSdk}`);
     });
-    test('启动 Activity 从 intent-filter 解析', () => {
+    test('La Activity de inicio se obtiene de intent-filter', () => {
       assert(meta.launchActivity === 'com.example.test.Main', `activity=${meta.launchActivity}`);
     });
-    test('ABI 目录与图标资源', () => {
+    test('Carpetas ABI y recursos de icono', () => {
       assert(JSON.stringify(meta.abis) === '["arm64-v8a"]', JSON.stringify(meta.abis));
       assert(meta.iconFile === 'res/mipmap-hdpi/ic_launcher.png', `icon=${meta.iconFile}`);
-      assert(meta.iconPng && meta.iconPng[0] === 0x89 && meta.iconPng[1] === 0x50, '图标应是 PNG');
-      assert(meta.sizeBytes === fs.statSync(tmp).size, '文件大小应回填');
+      assert(meta.iconPng && meta.iconPng[0] === 0x89 && meta.iconPng[1] === 0x50, 'El icono debería ser PNG');
+      assert(meta.sizeBytes === fs.statSync(tmp).size, 'El tamaño del archivo debería completarse');
     });
   } finally {
     try { fs.rmSync(tmp, { force: true }); } catch (_) { /* ignore */ }
@@ -190,28 +190,28 @@ console.log('\n[合成 APK：axml + apk 全链路]');
       ...(ori == null ? [] : [{ ns: ANDROID_NS, name: 'screenOrientation', typed: ori }]),
     ],
   });
-  test('屏幕方向：按 Activity 声明统计出应用天然方向', () => {
+  test('Orientación de pantalla: la orientación natural de la app se calcula a partir de lo que declaran sus Activity', () => {
     // El caso de «decenas de portrait + una pantalla de inicio sensor» → portrait
     const hongguo = [
       act('SplashActivity', 3), act('MainActivity', 1), act('ReaderActivity', 3),
       act('WebActivity', 1), act('DetailActivity', 1),
     ];
-    assert(detectOrientation(hongguo, hongguo[0]) === 'portrait', '多数声明 portrait 要判成竖屏');
+    assert(detectOrientation(hongguo, hongguo[0]) === 'portrait', 'Si la mayoría declara portrait debe ser vertical');
     // El caso de una sola Activity declarada landscape
     const modu = [act('MainActivity', 2)];
-    assert(detectOrientation(modu, modu[0]) === 'landscape', '单 landscape 活动要判成横屏');
+    assert(detectOrientation(modu, modu[0]) === 'landscape', 'Una sola Activity landscape debe ser horizontal');
     // Todo sensor / todo unspecified → no se puede decidir, se deja a la configuración
     const sensorOnly = [act('A', 3), act('B', 11), act('C', 0), act('D', 14)];
-    assert(detectOrientation(sensorOnly, sensorOnly[0]) === null, '全跟随重力时应返回 null');
-    assert(detectOrientation([act('A', null)], null) === null, '没声明方向时返回 null');
+    assert(detectOrientation(sensorOnly, sensorOnly[0]) === null, 'Si todo sigue a la gravedad debe devolver null');
+    assert(detectOrientation([act('A', null)], null) === null, 'Sin orientación declarada devuelve null');
     // La Activity de inicio pesa más: decide la primera pantalla que ve el usuario
     const launcherWins = [act('Launcher', 2), act('P1', 1), act('P2', 1), act('P3', 1)];
-    assert(detectOrientation(launcherWins, launcherWins[0]) === 'landscape', '启动 Activity 方向要加权');
+    assert(detectOrientation(launcherWins, launcherWins[0]) === 'landscape', 'La orientación de la Activity de inicio debe pesar más');
     // reversePortrait / userLandscape y similares también deben ir al lado correcto
-    assert(detectOrientation([act('A', 7)], null) === 'portrait', 'reversePortrait 属于竖屏');
-    assert(detectOrientation([act('A', 12)], null) === 'landscape', 'userLandscape 属于横屏');
+    assert(detectOrientation([act('A', 7)], null) === 'portrait', 'reversePortrait cuenta como vertical');
+    assert(detectOrientation([act('A', 12)], null) === 'landscape', 'userLandscape cuenta como horizontal');
   });
 }
 
-console.log(`\n结果：${passed} 通过，${failed} 失败\n`);
+console.log(`\nResultado: ${passed} correctas, ${failed} fallidas\n`);
 process.exit(failed ? 1 : 0);

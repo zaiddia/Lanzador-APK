@@ -79,7 +79,7 @@ async function test(name, fn) {
 
   console.log('\n[integridad de descargas]');
   console.log(results.join('\n'));
-  console.log(`\n结果：${passed} 通过，${failed} 失败\n`);
+  console.log(`\nResultado: ${passed} correctas, ${failed} fallidas\n`);
   fs.rmSync(tmp, { recursive: true, force: true });
   process.exit(failed ? 1 : 0);
 })();

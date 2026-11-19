@@ -37,7 +37,7 @@ const log = (p) => console.log(`[${p.stage}] ${p.message} ${p.percent != null ? 
     fs.existsSync(path.join(outRoot, 'emulator', 'emulator.exe')) &&
     fs.existsSync(path.join(outRoot, 'platform-tools', 'adb.exe')) &&
     fs.existsSync(path.join(outRoot, 'system-images', 'android-34', 'google_apis_playstore', 'x86_64', 'system.img'));
-  if (!ok) throw new Error('运行时组装后校验失败');
+  if (!ok) throw new Error('Falló la verificación tras ensamblar el runtime');
 
   // Reducción tipo contenedor: solo se conservan el QEMU x86_64 y los componentes necesarios para ejecutar sin ventana.
   // Los qemu-system-*.exe que no son x86_64 (unos 400 MB), QtWebEngine, netsim, etc. no sirven con -no-window.

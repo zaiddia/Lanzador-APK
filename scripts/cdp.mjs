@@ -39,7 +39,7 @@ async function pickTarget(match) {
   const all = await listTargets();
   if (!match) return all[0];
   const t = all.find((x) => (x.url || '').includes(match) || (x.title || '').includes(match));
-  if (!t) throw new Error(`未找到匹配标签: ${match}\n可用:\n${all.map((x) => `  ${x.url}`).join('\n')}`);
+  if (!t) throw new Error(`No se encontró la pestaña: ${match}\nDisponibles:\n${all.map((x) => `  ${x.url}`).join('\n')}`);
   return t;
 }
 
@@ -65,7 +65,7 @@ class Cdp {
       setTimeout(() => {
         if (this.pending.has(id)) {
           this.pending.delete(id);
-          reject(new Error(`CDP 超时: ${method}`));
+          reject(new Error(`Tiempo de espera de CDP agotado: ${method}`));
         }
       }, 30000);
     });
@@ -90,7 +90,7 @@ class Cdp {
   async upload(selector, files) {
     const doc = await this.send('DOM.getDocument', { depth: -1, pierce: true });
     const { nodeId } = await this.send('DOM.querySelector', { nodeId: doc.root.nodeId, selector });
-    if (!nodeId) throw new Error(`未找到文件输入框: ${selector}`);
+    if (!nodeId) throw new Error(`No se encontró el campo de archivo: ${selector}`);
     await this.send('DOM.setFileInputFiles', { files, nodeId });
     return true;
   }
@@ -103,7 +103,7 @@ async function attach(target) {
   const ws = new WebSocket(target.webSocketDebuggerUrl);
   await new Promise((resolve, reject) => {
     ws.onopen = resolve;
-    ws.onerror = (e) => reject(new Error('WebSocket 连接失败: ' + (e?.message || '')));
+    ws.onerror = (e) => reject(new Error('Falló la conexión WebSocket: ' + (e?.message || '')));
   });
   return new Cdp(ws);
 }
@@ -164,7 +164,7 @@ async function main() {
     console.log('files set:', args.slice(2).length);
     return;
   }
-  throw new Error(`未知命令: ${cmd}`);
+  throw new Error(`Comando desconocido: ${cmd}`);
 }
 
 main()

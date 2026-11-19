@@ -42,7 +42,7 @@ function launch(args, sandbox) {
 }
 
 (async () => {
-  if (!fs.existsSync(APK)) throw new Error(`找不到测试 APK: ${APK}`);
+  if (!fs.existsSync(APK)) throw new Error(`No se encuentra el APK de prueba: ${APK}`);
   const sandbox = path.join(os.tmpdir(), `apk-launch-${Date.now()}`);
   const appData = path.join(sandbox, 'lanzadorapk');
   fs.mkdirSync(appData, { recursive: true });
@@ -58,7 +58,7 @@ function launch(args, sandbox) {
   const check = (c, m) => { console.log(`${c ? '✓' : '✗'} ${m}`); if (!c) pass = false; };
 
   // ---- 1) Instalación ----
-  console.log('— 安装 APK（首次要冷启动模拟器，约 40~90 秒）…');
+  console.log('— Instalando el APK (la primera vez arranca el emulador en frío, unos 40~90 s)…');
   let p = launch(['--apk', APK], sandbox);
   let pkg = '';
   for (let i = 0; i < 240; i += 1) {
@@ -69,7 +69,7 @@ function launch(args, sandbox) {
     } catch (_) { /* Aún no se ha escrito */ }
     if (p.exitCode !== null) break;
   }
-  check(!!pkg, `安装完成：${pkg || '（超时）'}`);
+  check(!!pkg, `Instalación terminada: ${pkg || '(tiempo agotado)'}`);
   // Hay que esperar a que la primera instancia **salga de verdad** antes de lanzar la segunda: si el bloqueo de instancia única sigue, la segunda sale al instante,
   // y el síntoma es «la ventana nunca aparece», no un fallo de arranque (pasó en pruebas y costó mucho encontrarlo).
   try { p.kill(); } catch (_) { /* ignore */ }
@@ -78,12 +78,12 @@ function launch(args, sandbox) {
 
   if (!pkg) {
     agent.dispose();
-    console.log('\n结果：失败（没有装出应用，后续跳过）');
+    console.log('\nResultado: fallido (no se instaló la app; se omite el resto)');
     process.exit(1);
   }
 
   // ---- 2) Abrir la app ----
-  console.log('— 打开应用…');
+  console.log('— Abriendo la app…');
   p = launch(['--launch', pkg], sandbox);
   let leaked = 0;
   let sawAppWin = false;
@@ -97,28 +97,28 @@ function launch(args, sandbox) {
     const hit = list.filter(bad);
     if (hit.length) {
       leaked += hit.length;
-      console.log(`[${((i + 1) * 0.5).toFixed(1)}s] 可见的异常窗口:`, JSON.stringify(hit));
+      console.log(`[${((i + 1) * 0.5).toFixed(1)} s] ventanas anómalas visibles:`, JSON.stringify(hit));
     }
     // Ventana de la app = una ventana normal con título que no es del emulador ni de consola
     if (!sawAppWin) {
       sawAppWin = list.some((w) => {
         const t = String(w.title || '');
-        return t && !bad(w) && !/LanzadorAPK|WorkBuddy|Microsoft|Program Manager|设置|Edge|输入体验/.test(t);
+        return t && !bad(w) && !/LanzadorAPK|WorkBuddy|Microsoft|Program Manager|设置|Configuración|Settings|Edge|输入体验|Experiencia de entrada/.test(t);
       });
-      if (sawAppWin) console.log(`[${((i + 1) * 0.5).toFixed(1)}s] 应用窗口已出现`);
+      if (sawAppWin) console.log(`[${((i + 1) * 0.5).toFixed(1)} s] apareció la ventana de la app`);
     }
     if (sawAppWin && i > 40) break;
   }
 
-  check(leaked === 0, `模拟器/控制台窗口始终不可见（累计 ${leaked} 次）`);
-  check(sawAppWin, `应用窗口已出现（说明画面被嵌进窗口，而不是独立的模拟器窗口）`);
-  console.log('  可见窗口标题：', JSON.stringify([...titles].slice(0, 12)));
+  check(leaked === 0, `Las ventanas del emulador/consola nunca fueron visibles (total ${leaked} veces)`);
+  check(sawAppWin, `Apareció la ventana de la app (la imagen quedó incrustada en la ventana, no en una ventana aparte del emulador)`);
+  console.log('  Títulos de ventanas visibles:', JSON.stringify([...titles].slice(0, 12)));
   if (!pass) {
-    console.log('--- app.log 末尾 ---');
+    console.log('--- final de app.log ---');
     try {
       const log = fs.readFileSync(path.join(appData, 'logs', 'app.log'), 'utf8').trim().split('\n');
       console.log(log.slice(-12).join('\n'));
-    } catch (_) { console.log('（没有 app.log）'); }
+    } catch (_) { console.log('(no hay app.log)'); }
   }
 
   try { p.kill(); } catch (_) { /* ignore */ }
@@ -127,9 +127,9 @@ function launch(args, sandbox) {
   if (pass) {
     try { fs.rmSync(sandbox, { recursive: true, force: true, maxRetries: 3 }); } catch (_) { /* ignore */ }
   } else {
-    console.log(`  沙盒保留在：${sandbox}`);
+    console.log(`  El entorno aislado se conserva en: ${sandbox}`);
   }
   console.log('');
-  console.log(`结果：${pass ? '通过' : '失败'}`);
+  console.log(`Resultado: ${pass ? 'correctas' : 'fallidas'}`);
   process.exit(pass ? 0 : 1);
 })().catch((e) => { console.error('FATAL', e); process.exit(1); });

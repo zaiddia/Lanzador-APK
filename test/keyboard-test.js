@@ -53,6 +53,6 @@ function fake(imeList, current) {
 
   console.log('\n[teclado latino]');
   console.log(out.join('\n'));
-  console.log(`\n结果：${passed} 通过，${failed} 失败\n`);
+  console.log(`\nResultado: ${passed} correctas, ${failed} fallidas\n`);
   process.exit(failed ? 1 : 0);
 })();

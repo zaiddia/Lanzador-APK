@@ -45,7 +45,7 @@ const bad = (w) => {
   // El agente solo toca ventanas creadas por «procesos de la carpeta del runtime»: primero se declara el alcance; si no, no oculta nada
   await agent.scope([ROOT]);
   await agent.bootHide();
-  console.log('常驻压制已开启');
+  console.log('Supresión permanente activada');
 
   const proc = spawn(EMU, [
     '-avd', 'lanzadorapk', '-port', '5554', '-no-boot-anim', '-no-metrics',
@@ -73,21 +73,21 @@ const bad = (w) => {
     const hit = list.filter(bad);
     if (hit.length) {
       leaked += hit.length;
-      console.log(`[${((i + 1) * 0.5).toFixed(1)}s] 可见的异常窗口:`, JSON.stringify(hit));
+      console.log(`[${((i + 1) * 0.5).toFixed(1)} s] ventanas anómalas visibles:`, JSON.stringify(hit));
     }
   }
 
   const probe = await agent.probe().catch(() => null);
-  console.log('probe（隐藏窗口也应当能被找到）:', JSON.stringify(probe));
+  console.log('probe (las ventanas ocultas también deben encontrarse):', JSON.stringify(probe));
 
   const left = (await windows()).filter(bad);
-  console.log('结束时仍在桌面上的异常窗口:', JSON.stringify(left));
+  console.log('Ventanas anómalas que siguen en el escritorio al terminar:', JSON.stringify(left));
 
   const okProbe = !!(probe && Number(probe.emu) !== 0);
   // Se permite que «apareciera pero se suprimiera en menos de 400 ms»; al final debe ser 0
   const ok = left.length === 0 && okProbe;
   console.log('');
-  console.log(`结果：${ok ? '通过' : '失败'}（过程中可见异常窗口累计 ${leaked} 次，结束时 ${left.length} 个）`);
+  console.log(`Resultado: ${ok ? 'correctas' : 'fallidas'}(ventanas anómalas visibles en total durante el proceso: ${leaked}; al terminar: ${left.length} )`);
 
   try { proc.kill(); } catch (_) { /* ignore */ }
   agent.dispose();

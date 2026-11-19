@@ -34,16 +34,16 @@ const log = (m) => console.log(`  ${m}`);
 async function ensureIso() {
   if (fs.existsSync(ISO) && fs.statSync(ISO).size > 50 * 1024 * 1024) return;
   fs.mkdirSync(WORK, { recursive: true });
-  log('下载 Alpine virt ISO（约 61MB）…');
+  log('Descargando la ISO Alpine virt (unos 61 MB)…');
   await downloadParallel(ISO_URL, ISO, { connections: 8, minChunk: 4 * 1024 * 1024 });
 }
 
 (async () => {
-  console.log('\n[真实引导测试]');
+  console.log('\n[Prueba de arranque real]');
   const runtime = new Runtime(path.join(__dirname, '..'));
   const env = await runtime.provisioner.checkEnv();
   if (!env.qemu.ok) {
-    console.error('  跳过：未安装 QEMU');
+    console.error('  Omitida: QEMU no está instalado');
     process.exit(0);
   }
   log(`QEMU ${env.qemu.version} · ${env.qemu.path}`);
@@ -56,7 +56,7 @@ async function ensureIso() {
   try { fs.rmSync(DISK, { force: true }); } catch (_) { /* ignore */ }
   const { execFileSync } = require('child_process');
   execFileSync(img, ['create', '-f', 'qcow2', DISK, '2G'], { windowsHide: true });
-  log(`虚拟磁盘 ${(fs.statSync(DISK).size / 1024).toFixed(0)}KB（稀疏）`);
+  log(`Disco virtual ${(fs.statSync(DISK).size / 1024).toFixed(0)} KB (disperso)`);
 
   // 2) usar los parámetros de arranque reales del producto
   runtime._hv = env.hypervisor;
@@ -68,7 +68,7 @@ async function ensureIso() {
   args.push('-serial', `file:${SERIAL}`, '-no-reboot');
   try { fs.rmSync(SERIAL, { force: true }); } catch (_) { /* ignore */ }
 
-  log(`启动：${args.filter((a) => !a.includes('=')).slice(0, 8).join(' ')} …`);
+  log(`Arranque: ${args.filter((a) => !a.includes('=')).slice(0, 8).join(' ')} …`);
   const proc = spawn(env.qemu.path, args, { stdio: 'ignore', windowsHide: true });
   let exited = false;
   proc.on('exit', () => { exited = true; });
@@ -88,11 +88,11 @@ async function ensureIso() {
   const elapsed = ((Date.now() - start) / 1000).toFixed(0);
   if (!booted) {
     const tail = fs.existsSync(SERIAL) ? fs.readFileSync(SERIAL, 'latin1').slice(-600) : '(无串口输出)';
-    console.error(`  ✗ 引导失败（${elapsed}s）：\n${tail}`);
+    console.error(`  ✗ Falló el arranque (${elapsed} s):\n${tail}`);
     try { proc.kill(); } catch (_) { /* ignore */ }
     process.exit(1);
   }
-  log(`✓ guest 已进入用户态（${elapsed}s）`);
+  log(`✓ El invitado llegó al espacio de usuario (${elapsed} s)`);
 
   // 4) apagado ordenado: primero system_powerdown y, si se agota el tiempo, quit (justo lo que hace stop() en el producto)
   let graceful = false;
@@ -103,7 +103,7 @@ async function ensureIso() {
       await sleep(500);
     }
     if (!exited) {
-      log('guest 未响应 ACPI 关机，改用 quit（产品同样会这样兜底）…');
+      log('El invitado no respondió al apagado ACPI; se usa quit (el producto hace el mismo respaldo)…');
       await runtime.monitorCmd('quit');
       for (let i = 0; i < 10; i++) {
         if (exited) break;
@@ -111,15 +111,15 @@ async function ensureIso() {
       }
     }
   } catch (e) {
-    log(`monitor 异常：${e.message}`);
+    log(`Error del monitor: ${e.message}`);
   }
   if (!exited) { try { proc.kill(); } catch (_) { /* ignore */ } }
-  log(exited ? `✓ 虚拟机关闭（${graceful ? 'ACPI 优雅关机' : 'quit 兜底'}）` : '✗ 虚拟机关闭失败');
+  log(exited ? `✓ Máquina virtual apagada (${graceful ? 'apagado ACPI ordenado' : 'respaldo con quit'})` : '✗ No se pudo apagar la máquina virtual');
 
   try { fs.rmSync(DISK, { force: true }); } catch (_) { /* ignore */ }
-  console.log(`\n结果：${exited ? '通过' : '失败'}\n`);
+  console.log(`\nResultado: ${exited ? 'correctas' : 'fallidas'}\n`);
   process.exit(exited ? 0 : 1);
 })().catch((e) => {
-  console.error('  异常：', e.message);
+  console.error('  Error:', e.message);
   process.exit(1);
 });

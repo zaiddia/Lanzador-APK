@@ -47,68 +47,68 @@ async function step(name, fn) {
 }
 
 (async () => {
-  console.log('\nLanzadorAPK 运行时自检');
-  console.log(`设备：${SERIAL}`);
+  console.log('\nAutocomprobación del runtime de LanzadorAPK');
+  console.log(`Dispositivo: ${SERIAL}`);
   console.log('─'.repeat(64));
 
-  console.log('\n[组件]');
+  console.log('\n[Componentes]');
   const runtime = new Runtime(path.join(__dirname, '..'));
   const prov = runtime.provisioner;
 
   let env = null;
-  await step('adb 可用', async () => {
+  await step('adb disponible', async () => {
     env = await prov.checkEnv();
-    if (!env.adb.ok) throw new Error('未安装 adb，请先运行「一键部署」');
+    if (!env.adb.ok) throw new Error('adb no está instalado; ejecuta primero «Implementación en un clic»');
     return `v${env.adb.version}`;
   });
-  await step('Android Emulator 就绪', async () => {
-    if (!env.emulator.ok) throw new Error('未安装运行时引擎，请先运行「一键部署」');
+  await step('Android Emulator listo', async () => {
+    if (!env.emulator.ok) throw new Error('El motor del runtime no está instalado; ejecuta primero «Implementación en un clic»');
     return `v${env.emulator.version}`;
   });
-  await step('系统镜像完整', async () => {
-    if (!env.sysimg.ok) throw new Error(env.sysimg.note || '镜像缺失');
+  await step('Imagen del sistema completa', async () => {
+    if (!env.sysimg.ok) throw new Error(env.sysimg.note || 'Falta la imagen');
     return `Android ${env.sysimg.api} · ${(env.sysimg.size / 1073741824).toFixed(2)}GB`;
   });
-  record('硬件加速', env.accel.ok ? true : null,
-    env.accel.ok ? env.accel.note : '自动回退软件模拟（能跑，但明显慢）');
+  record('Aceleración por hardware', env.accel.ok ? true : null,
+    env.accel.ok ? env.accel.note : 'Se recurre a emulación por software (funciona, pero bastante más lento)');
 
-  console.log('\n[设备]');
+  console.log('\n[Dispositivo]');
   let client = runtime.client(SERIAL || undefined);
-  const online = await step('运行时已就绪', async () => {
+  const online = await step('Runtime listo', async () => {
     if (SERIAL) {
       await client.connect().catch(() => false);
-      if (!await client.isOnline()) throw new Error(`外部设备不在线：${SERIAL}`);
+      if (!await client.isOnline()) throw new Error(`El dispositivo externo no está en línea: ${SERIAL}`);
       return SERIAL;
     }
     const r = await runtime.ensure({ onLog: () => {} });
-    if (!r.ok) throw new Error(r.error || '运行时不可用');
+    if (!r.ok) throw new Error(r.error || 'Runtime no disponible');
     client = r.client;
     return client.serial;
   });
 
   if (!online) {
-    console.log('\n设备未就绪，后续项目跳过。');
+    console.log('\nEl dispositivo no está listo; se omiten los demás puntos.');
   } else {
-    await step('Android 版本', async () => {
+    await step('Versión de Android', async () => {
       const [ver, sdk, abi] = await Promise.all([
         client.androidVersion(), client.sdkInt(), client.shell('getprop ro.product.cpu.abi').catch(() => ''),
       ]);
-      if (!ver) throw new Error('读不到系统版本');
+      if (!ver) throw new Error('No se puede leer la versión del sistema');
       return `Android ${ver} (API ${sdk}) · ${String(abi).trim()}`;
     });
-    await step('屏幕分辨率', async () => {
+    await step('Resolución de pantalla', async () => {
       const s = await client.wmSize();
-      if (!s) throw new Error('wm size 无返回');
+      if (!s) throw new Error('wm size no devolvió nada');
       return `${s.width}×${s.height}`;
     });
-    await step('freeform 独立窗口', async () => {
+    await step('Ventana independiente freeform', async () => {
       const ok = await client.ensureFreeform();
-      if (!ok) throw new Error('无法开启 freeform（系统可能不支持多窗口）');
-      return '已开启';
+      if (!ok) throw new Error('No se puede activar freeform (puede que el sistema no admita varias ventanas)');
+      return 'Activado';
     });
 
-    console.log('\n[共享目录]');
-    await step('双向同步', async () => {
+    console.log('\n[Carpeta compartida]');
+    await step('Sincronización en ambos sentidos', async () => {
       const sharer = new Sharer(runtime);
       await client.shellMkdir(store.getSettings().deviceSharedDir);
       const localDir = store.getSettings().sharedDir;
@@ -121,53 +121,53 @@ async function step(name, fn) {
       if (up.errors && up.errors.length) throw new Error(up.errors[0]);
       const remote = `${store.getSettings().deviceSharedDir}/${path.basename(probe)}`;
       const back = await client.shell(`cat "${remote}" 2>/dev/null`);
-      if (!String(back).includes('lanzadorapk selftest')) throw new Error('本机 → 设备 未同步');
+      if (!String(back).includes('lanzadorapk selftest')) throw new Error('Equipo → dispositivo sin sincronizar');
 
       const reverse = path.join(localDir, `selftest-from-device-${Date.now()}.txt`);
       await client.shell(`echo device-side > "${store.getSettings().deviceSharedDir}/${path.basename(reverse)}"`);
       await sharer.sync();
       if (!fs.existsSync(reverse) || !fs.readFileSync(reverse, 'utf8').includes('device-side')) {
-        throw new Error('设备 → 本机 未同步');
+        throw new Error('Dispositivo → equipo sin sincronizar');
       }
       fs.rmSync(probe, { force: true });
       fs.rmSync(reverse, { force: true });
       await client.shell(`rm -f "${remote}"`);
-      return '上行 + 下行均正常';
+      return 'Subida + bajada correctas';
     });
 
     if (APK) {
-      console.log('\n[应用链路]');
+      console.log('\n[Cadena de la app]');
       let meta = null;
-      await step('解析 APK', async () => {
+      await step('Analizar APK', async () => {
         meta = parseApk(APK);
         return `${meta.label} (${meta.package} v${meta.versionName})`;
       });
       if (meta) {
-        await step('安装到设备', async () => {
+        await step('Instalar en el dispositivo', async () => {
           await client.install(APK);
           const installed = await client.isInstalled(meta.package);
-          if (!installed) throw new Error('pm path 未找到包');
-          return 'pm path 校验通过';
+          if (!installed) throw new Error('pm path no encontró el paquete');
+          return 'pm path verificado';
         });
-        await step('独立窗口启动', async () => {
+        await step('Inicio en ventana independiente', async () => {
           await client.startApp(meta.package, meta.launchActivity, { freeform: true });
           await sleep(4000);
           const top = await client.shell('dumpsys activity activities | grep -E "mResumedActivity|topResumedActivity"');
-          if (!String(top).includes(meta.package)) throw new Error('应用未在前台');
+          if (!String(top).includes(meta.package)) throw new Error('La app no está en primer plano');
           return meta.package;
         });
-        await step('截图', async () => {
+        await step('Captura de pantalla', async () => {
           const png = await client.screenshot();
           const out = path.join(__dirname, '..', 'test', 'out');
           fs.mkdirSync(out, { recursive: true });
           const file = path.join(out, 'selftest.png');
           fs.writeFileSync(file, png);
-          if (png.length < 4096) throw new Error('截图内容异常');
+          if (png.length < 4096) throw new Error('Contenido de la captura anómalo');
           return file;
         });
       }
     } else {
-      console.log('\n[应用链路] 未指定 --apk，跳过');
+      console.log('\n[Cadena de la app] no se indicó --apk; se omite');
     }
   }
 
@@ -179,16 +179,16 @@ async function step(name, fn) {
 
   const failed = results.filter((r) => r.ok === false);
   console.log('\n' + '─'.repeat(64));
-  console.log(`结果：${results.filter((r) => r.ok === true).length} 通过，${failed.length} 失败，`
-    + `${results.filter((r) => r.ok === null).length} 跳过`);
+  console.log(`Resultado: ${results.filter((r) => r.ok === true).length} correctas, ${failed.length} fallidas, `
+    + `${results.filter((r) => r.ok === null).length} omitidas`);
   if (failed.length) {
-    console.log('失败项：');
-    failed.forEach((f) => console.log(`  · ${f.name}：${f.detail}`));
+    console.log('Puntos fallidos:');
+    failed.forEach((f) => console.log(`  · ${f.name}: ${f.detail}`));
     process.exit(1);
   }
-  console.log('全部检查通过 ✅\n');
+  console.log('Todas las comprobaciones pasaron ✅\n');
   process.exit(0);
 })().catch((e) => {
-  console.error('\n自检异常终止：', e.message);
+  console.error('\nLa autocomprobación terminó con error:', e.message);
   process.exit(1);
 });

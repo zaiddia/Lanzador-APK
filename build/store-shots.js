@@ -47,8 +47,8 @@ app.whenReady().then(async () => {
     fs.writeFileSync(file, buf);
     const s = nativeImage.createFromBuffer(buf).getSize();
     console.log(`  ${path.relative(ROOT, file).replace(/\\/g, '/')}  ${s.width}x${s.height}  ${(buf.length / 1024).toFixed(0)}KB`);
-    if (s.width !== W || s.height !== H) console.log(`  [警告] 期望 ${W}x${H}`);
+    if (s.width !== W || s.height !== H) console.log(`  [advertencia] se esperaba ${W}x${H}`);
   }
-  console.log('完成。');
+  console.log('Listo.');
   app.exit(0);
-}).catch((e) => { console.error('失败：', e); app.exit(1); });
+}).catch((e) => { console.error('Error:', e); app.exit(1); });

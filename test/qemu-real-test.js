@@ -30,11 +30,11 @@ function test(name, fn) {
   return Promise.resolve().then(fn).then(() => { passed++; out.push(`  ✓ ${name}`); })
     .catch((e) => { failed++; out.push(`  ✗ ${name}\n    ${e.message}`); });
 }
-function assert(c, m) { if (!c) throw new Error(m || '断言失败'); }
+function assert(c, m) { if (!c) throw new Error(m || 'Aserción fallida'); }
 
 (async () => {
   if (!QEMU) {
-    console.log('（跳过：本机未找到 QEMU，可安装后重试：winget install SoftwareFreedomConservancy.QEMU）');
+    console.log('(Omitida: no se encontró QEMU en el equipo; instálalo y vuelve a intentar: winget install SoftwareFreedomConservancy.QEMU)');
     process.exit(0);
   }
   const ver = execFileSync(QEMU, ['--version'], { encoding: 'utf8' });
@@ -47,12 +47,12 @@ function assert(c, m) { if (!c) throw new Error(m || '断言失败'); }
   fs.mkdirSync(work, { recursive: true });
   const disk = path.join(work, 'test.qcow2');
 
-  await test('qemu-img 创建虚拟磁盘', () => {
+  await test('qemu-img crea el disco virtual', () => {
     execFileSync(QEMU_IMG, ['create', '-f', 'qcow2', disk, '2G'], { timeout: 30000 });
-    assert(fs.existsSync(disk) && fs.statSync(disk).size > 0, '磁盘未创建');
+    assert(fs.existsSync(disk) && fs.statSync(disk).size > 0, 'No se creó el disco');
   });
 
-  await test('LanzadorAPK 启动参数被真实 QEMU 接受并稳定运行', async () => {
+  await test('Un QEMU real acepta los parámetros de arranque de LanzadorAPK y corre estable', async () => {
     store.saveSettings({
       engine: { memoryMB: 1024, cores: 2 },
       runtime: { diskPath: disk, headless: true },
@@ -66,25 +66,25 @@ function assert(c, m) { if (!c) throw new Error(m || '断言失败'); }
     proc.on('exit', (c) => { exited = c; });
 
     await new Promise((r) => setTimeout(r, 4000));
-    assert(exited === null, `QEMU 在 4s 内退出（code=${exited}），参数可能不被接受`);
-    assert(!proc.killed, '进程应存活');
+    assert(exited === null, `QEMU salió en menos de 4 s (code=${exited}); puede que no acepte los parámetros`);
+    assert(!proc.killed, 'El proceso debería seguir vivo');
 
-    await test('monitor 协议（真实 QEMU）', async () => {
+    await test('Protocolo del monitor (QEMU real)', async () => {
       const buf = await rt.monitorCmd('info status', { timeout: 5000 });
-      assert(/running|paused/i.test(buf), `monitor 响应异常: ${buf.slice(-80)}`);
+      assert(/running|paused/i.test(buf), `Respuesta anómala del monitor: ${buf.slice(-80)}`);
       await rt.monitorCmd('sendkey ctrl-alt-delete');
     });
 
-    await test('monitor 优雅退出', async () => {
+    await test('Salida ordenada del monitor', async () => {
       await rt.monitorCmd('quit');
       await new Promise((r) => setTimeout(r, 1500));
-      assert(exited !== null || proc.killed, 'QEMU 应已退出');
+      assert(exited !== null || proc.killed, 'QEMU debería haber salido');
     });
     try { proc.kill(); } catch (_) { /* ignore */ }
   });
 
   console.log(out.join('\n'));
-  console.log(`\n结果：${passed} 通过，${failed} 失败\n`);
+  console.log(`\nResultado: ${passed} correctas, ${failed} fallidas\n`);
   try { fs.rmSync(process.env.APPDATA, { recursive: true, force: true }); } catch (_) { /* ignore */ }
   process.exit(failed ? 1 : 0);
 })();

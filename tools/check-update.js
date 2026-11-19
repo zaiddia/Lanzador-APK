@@ -23,8 +23,8 @@ const ok = (c, m) => console.log(`${c ? '✓' : '✗'} ${m}`);
 
   // ---- 1. Comparación de versiones ----
   check(cmpVer('v0.3.2', '0.3.1') === 1, 'v0.3.2 > 0.3.1');
-  check(cmpVer('0.3.1', 'v0.3.1') === 0, 'v 前缀不影响相等');
-  check(cmpVer('v0.10.0', '0.9.9') === 1, '0.10.0 > 0.9.9（按数字比，不是字符串）');
+  check(cmpVer('0.3.1', 'v0.3.1') === 0, 'El prefijo v no afecta la igualdad');
+  check(cmpVer('v0.10.0', '0.9.9') === 1, '0.10.0 > 0.9.9 (comparación numérica, no de texto)');
   check(cmpVer('1.0.0', '1.0.1') === -1, '1.0.0 < 1.0.1');
 
   // ---- 2. GitHub release ----
@@ -41,11 +41,11 @@ const ok = (c, m) => console.log(`${c ? '✓' : '✗'} ${m}`);
   let info = null;
   try {
     info = await u.check();
-    check(!!info && !!info.version, `读取到最新版本 ${info && info.tag}`);
-    check(info.hasUpdate === true, '当前版本 0.0.0 → 判定有更新');
-    check(!!info.asset && /\.(zip|exe)$/i.test(info.asset.name), `便携形态挑到资产 ${info.asset && info.asset.name}`);
+    check(!!info && !!info.version, `Última versión leída: ${info && info.tag}`);
+    check(info.hasUpdate === true, 'Versión actual 0.0.0 → hay actualización');
+    check(!!info.asset && /\.(zip|exe)$/i.test(info.asset.name), `La forma portátil eligió el recurso ${info.asset && info.asset.name}`);
   } catch (e) {
-    check(false, `GitHub 检查失败：${e.message}`);
+    check(false, `Falló la comprobación en GitHub: ${e.message}`);
   }
 
   // La forma instalada (con desinstalador) debe elegir Setup.exe
@@ -56,7 +56,7 @@ const ok = (c, m) => console.log(`${c ? '✓' : '✗'} ${m}`);
     isPackaged: true,
     dataDir: sandbox,
   });
-  check(u2.flavor === 'setup', '识别为安装版（存在 Uninstall LanzadorAPK.exe）');
+  check(u2.flavor === 'setup', 'Reconocida como versión instalada (existe Uninstall LanzadorAPK.exe)');
 
   // ---- 3. El script de sobrescritura de verdad funciona ----
   const payload = path.join(sandbox, 'payload');
@@ -72,7 +72,7 @@ const ok = (c, m) => console.log(`${c ? '✓' : '✗'} ${m}`);
     { mode: 'zip', payload, version: '9.9.9' },
     { waitPid: decoy.pid, spawn: false },
   );
-  check(/Copy-Item/.test(script) && /Wait-Process/.test(script), '脚本包含等待进程与覆盖动作');
+  check(/Copy-Item/.test(script) && /Wait-Process/.test(script), 'El script incluye la espera del proceso y la sobrescritura');
 
   const ps = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
   // No se hace Start-Process de LanzadorAPK.exe (es un exe falso); solo se verifica la copia
@@ -83,13 +83,13 @@ const ok = (c, m) => console.log(`${c ? '✓' : '✗'} ${m}`);
       stdio: 'ignore', timeout: 60000, windowsHide: true,
     });
   } catch (e) {
-    check(false, `覆盖脚本执行失败：${e.message}`);
+    check(false, `Falló la ejecución del script de sobrescritura: ${e.message}`);
   }
   await sleep(600);
   const newExe = fs.readFileSync(path.join(install, 'LanzadorAPK.exe'), 'utf8');
   const newMain = fs.readFileSync(path.join(install, 'resources', 'app', 'main.js'), 'utf8');
-  check(newExe === 'new-exe', '安装目录里的 LanzadorAPK.exe 已被替换');
-  check(newMain === 'new-main', '子目录里的文件也替换成功');
+  check(newExe === 'new-exe', 'El LanzadorAPK.exe de la carpeta de instalación fue reemplazado');
+  check(newMain === 'new-main', 'Los archivos de las subcarpetas también se reemplazaron');
 
   // ---- 4. apply() de verdad lanza un proceso que reemplaza (cadena asíncrona, sin red) ----
   const install2 = path.join(sandbox, 'install2');
@@ -116,13 +116,13 @@ const ok = (c, m) => console.log(`${c ? '✓' : '✗'} ${m}`);
       if (fs.readFileSync(path.join(install2, 'marker.txt'), 'utf8') === 'new') { asyncOk = true; break; }
     } catch (_) { /* Aún reemplazando */ }
   }
-  check(asyncOk, 'apply() 在后台进程里完成了替换（异步链路可用）');
+  check(asyncOk, 'apply() completó el reemplazo en un proceso en segundo plano (la cadena asíncrona funciona)');
 
   try { decoy.kill(); } catch (_) { /* ignore */ }
   try { decoy2.kill(); } catch (_) { /* ignore */ }
   fs.rmSync(sandbox, { recursive: true, force: true });
 
   console.log('');
-  console.log(pass ? '结果：通过' : '结果：有失败项');
+  console.log(pass ? 'Resultado: correcto' : 'Resultado: hay fallos');
   process.exit(pass ? 0 : 1);
 })().catch((e) => { console.error('FATAL', e); process.exit(1); });

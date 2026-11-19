@@ -20,12 +20,12 @@ if (action === 'on') {
   const iconPath = path.join(__dirname, '..', 'build', 'lanzadorapk.ico');
   const r = registerAssociation(exe, fs.existsSync(iconPath) ? iconPath : undefined,
     isDev ? `"${appDir}"` : undefined);
-  console.log('已注册 .apk 关联：', r.progId);
-  console.log('现在在资源管理器中双击 .apk 即可安装到 LanzadorAPK。');
+  console.log('Asociación .apk registrada:', r.progId);
+  console.log('Ahora, al hacer doble clic en un .apk en el Explorador se instala en LanzadorAPK.');
 } else if (action === 'off') {
   unregisterAssociation();
-  console.log('已取消 .apk 关联。');
+  console.log('Asociación .apk eliminada.');
 } else {
-  console.log('用法：node scripts/assoc.js [on|off]');
+  console.log('Uso: node scripts/assoc.js [on|off]');
   process.exit(1);
 }

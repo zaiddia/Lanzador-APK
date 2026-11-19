@@ -28,7 +28,7 @@ app.whenReady().then(async () => {
     fs.writeFileSync(path.join(OUT, 'icon.png'), png);
     const ico = pngToIco(png);
     fs.writeFileSync(path.join(OUT, 'icon.ico'), ico);
-    step('生成 ICO', !!ico && ico.length > 1000, `${ico ? ico.length : 0} bytes`);
+    step('Generar ICO', !!ico && ico.length > 1000, `${ico ? ico.length : 0} bytes`);
 
     // 1b. Ruta de respaldo para iconos WebP: nativeImage no decodifica WebP; debe llegar al callback decode,
     // y sin decodificador usar el icono provisional de marca y **reportarlo con honestidad** (al instalar se convierte en una advertencia leve).
@@ -37,18 +37,18 @@ app.whenReady().then(async () => {
       const webp = Buffer.from('UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA', 'base64');
       let noDecoder = '';
       const placeholderIco = await iconToIco(webp, { onFallback: (why) => { noDecoder = why; } });
-      step('WebP 无解码器 → 合法 ICO 且回报占位降级',
+      step('WebP sin decodificador → ICO válido y se reporta el uso del provisional',
         !!placeholderIco && placeholderIco.length > 100 && /placeholder|webp-decode-failed/.test(noDecoder),
         noDecoder || '(no callback)');
 
       let decoded = 0;
       const viaDecode = await iconToIco(webp, {
         decode: async () => { decoded++; return png; },
-        onFallback: (why) => { throw new Error(`不该降级：${why}`); },
+        onFallback: (why) => { throw new Error(`No debería usar el provisional: ${why}`); },
       });
       // Si algún día nativeImage decodifica WebP directamente, decoded será 0 y también pasa; lo clave es producir un ICO válido
-      step('WebP 图标最终产出 ICO', !!viaDecode && viaDecode.readUInt16LE(2) === 1,
-        `decode 调用 ${decoded} 次，${viaDecode ? viaDecode.length : 0} bytes`);
+      step('El icono WebP termina produciendo un ICO', !!viaDecode && viaDecode.readUInt16LE(2) === 1,
+        `llamadas a decode: ${decoded} , ${viaDecode ? viaDecode.length : 0} bytes`);
     }
 
     // 2. Accesos directos
@@ -60,9 +60,9 @@ app.whenReady().then(async () => {
       iconIcoPath: path.join(OUT, 'icon.ico'),
       description: 'LanzadorAPK 集成测试',
     });
-    step('创建 .lnk', fs.existsSync(lnk));
+    step('Crear .lnk', fs.existsSync(lnk));
     removeShortcut(lnk);
-    step('删除 .lnk', !fs.existsSync(lnk));
+    step('Borrar .lnk', !fs.existsSync(lnk));
 
     // 3. Icono de APK real → ICO
     const fixture = process.env.LANZADORAPK_TEST_APK
@@ -77,9 +77,9 @@ app.whenReady().then(async () => {
       const iconIco = pngToIco(meta.iconPng);
       if (iconIco) {
         fs.writeFileSync(path.join(OUT, 'app.ico'), iconIco);
-        step('APK 图标 → 多尺寸 ICO', true, `${meta.label}: ${iconIco.length} bytes`);
+        step('Icono del APK → ICO de varios tamaños', true, `${meta.label}: ${iconIco.length} bytes`);
       } else {
-        step('APK 图标 → 多尺寸 ICO', false, 'pngToIco 返回空（图标可能是 webp/jpg 之外的格式）');
+        step('Icono del APK → ICO de varios tamaños', false, 'pngToIco devolvió vacío (el icono quizá tiene un formato distinto de webp/jpg)');
       }
     }
 

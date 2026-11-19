@@ -83,7 +83,7 @@ async function xzFile(src, dest) {
       p.on('error', () => resolve(-1));
     });
     const watchdog = setTimeout(() => {
-      console.log(`  （xz 压缩超过 ${Math.round(timeoutMs / 60000)} 分钟，终止并改用 gzip -9）`);
+      console.log(`  (la compresión xz superó ${Math.round(timeoutMs / 60000)} minutos; se cancela y se usa gzip -9)`);
       try { p.kill(); } catch (_) { /* Ya terminó */ }
     }, timeoutMs);
 
@@ -108,9 +108,9 @@ async function xzFile(src, dest) {
     if (ok) return;
     // Un .xz a medias contamina el resultado; hay que borrarlo antes de usar el respaldo.
     try { fs.rmSync(dest, { force: true }); } catch (_) { /* ignore */ }
-    console.log(`  （${py} 压缩失败，改用 gzip -9）`);
+    console.log(`  (${py} falló al comprimir; se usa gzip -9)`);
   } else {
-    console.log('  （未找到 python，改用 gzip -9（体积略大但可靠））');
+    console.log('  (no se encontró python; se usa gzip -9 (algo más grande pero fiable))');
   }
   // Respaldo: gzip -9 (no xz; materializeImages elige el descompresor según la extensión)
   await pipeline(
@@ -123,11 +123,11 @@ async function xzFile(src, dest) {
 async function main() {
   const force = process.argv.includes('--force');
   if (fs.existsSync(MARK) && !force) {
-    console.log('build/runtime 已是最新（加 --force 重建）');
+    console.log('build/runtime ya está actualizado (agrega --force para reconstruir)');
     return;
   }
   if (!fs.existsSync(SRC)) {
-    console.error('缺少 engine/ 目录，无法准备运行时');
+    console.error('Falta la carpeta engine/; no se puede preparar el runtime');
     process.exit(1);
   }
   fs.mkdirSync(OUT, { recursive: true });
@@ -136,13 +136,13 @@ async function main() {
   for (const dir of ['emulator', 'platform-tools']) {
     const s = path.join(SRC, dir);
     if (!fs.existsSync(s)) continue;
-    console.log(`复制 ${dir}…`);
+    console.log(`Copiando ${dir}…`);
     fs.cpSync(s, path.join(OUT, dir), { recursive: true });
   }
 
   // 1.5 Reducción: borra archivos que nunca se cargan con los parámetros de arranque fijos (unos -400 MB)
   if (!process.argv.includes('--no-slim')) {
-    console.log('瘦身运行时…');
+    console.log('Reduciendo el runtime…');
     const { slim } = require('./slim-runtime');
     slim(OUT, { aggressive: !process.argv.includes('--safe-slim') });
   }
@@ -168,7 +168,7 @@ async function main() {
             // La plantilla se generó una sola vez (mke2fs) y viaja con el código; el CI no necesita herramientas extra.
             if (/^userdata\.img$/i.test(f) && fs.existsSync(SEED_USERDATA)) {
               fs.copyFileSync(SEED_USERDATA, path.join(to, 'userdata.img.gz'));
-              console.log('userdata.img 使用预置 ext4 模板（build/seed）');
+              console.log('userdata.img usa la plantilla ext4 predefinida (build/seed)');
               compressed += 1;
               continue;
             }
@@ -181,11 +181,11 @@ async function main() {
               // un umbral fijo grande o una «tasa de compresión» los tomaría por inválidos y los volvería a comprimir.
               const existing = [xz, gz].find((p) => sizeOf(p) > 1024 * 1024);
               if (existing) {
-                console.log(`跳过 ${f}（已有 ${path.extname(existing)} ${(sizeOf(existing) / 1048576).toFixed(1)} MB）`);
+                console.log(`Se omite ${f} (ya existe, ${path.extname(existing)} ${(sizeOf(existing) / 1048576).toFixed(1)} MB)`);
                 compressed += 1;
                 continue;
               }
-              console.log(`压缩 ${f}（${(sizeOf(src) / 1073741824).toFixed(2)} GB）→ XZ 9e（较慢，一次性）…`);
+              console.log(`Comprimiendo ${f} (${(sizeOf(src) / 1073741824).toFixed(2)} GB) → XZ 9e (lento, una sola vez)…`);
               // eslint-disable-next-line no-await-in-loop
               await xzFile(src, xz);
               compressed += 1;
@@ -208,7 +208,7 @@ async function main() {
     }
   };
   walk(OUT);
-  console.log(`完成：build/runtime（${(total / 1073741824).toFixed(2)} GB，压缩了 ${gzCount} 个大镜像）`);
+  console.log(`Listo: build/runtime (${(total / 1073741824).toFixed(2)} GB, se comprimieron ${gzCount} imágenes grandes)`);
 }
 
 if (require.main === module) {

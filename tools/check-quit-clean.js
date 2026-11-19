@@ -68,22 +68,22 @@ const bad = (w) => {
     const hit = ((r && r.list) || []).filter(bad);
     if (hit.length) {
       leaked += hit.length;
-      console.log(`[${((i + 1) * 0.5).toFixed(1)}s] 可见的异常窗口:`, JSON.stringify(hit));
+      console.log(`[${((i + 1) * 0.5).toFixed(1)} s] ventanas anómalas visibles:`, JSON.stringify(hit));
     }
     if (!exitedAt && proc.exitCode !== null) {
       exitedAt = i;
-      console.log(`[${((i + 1) * 0.5).toFixed(1)}s] LanzadorAPK 已退出，继续观察 8 秒…`);
+      console.log(`[${((i + 1) * 0.5).toFixed(1)} s] LanzadorAPK salió; se sigue observando 8 s…`);
     }
     if (exitedAt && i - exitedAt >= 16) break;
   }
 
   const after = ((await agent.call({ cmd: 'windows' }, 5000).catch(() => null)) || {}).list || [];
   const left = after.filter(bad);
-  console.log('退出后仍在桌面上的异常窗口:', JSON.stringify(left));
+  console.log('Ventanas anómalas que siguen en el escritorio tras salir:', JSON.stringify(left));
   console.log('');
   const ok = leaked === 0 && left.length === 0;
-  console.log(`结果：${ok ? '通过（全程零可见窗口）' : '失败'}`);
-  if (out) console.log('--- app 输出 ---\n' + out.trim().split('\n').slice(-6).join('\n'));
+  console.log(`Resultado: ${ok ? 'Correcto (cero ventanas visibles en todo el proceso)' : 'fallidas'}`);
+  if (out) console.log('--- salida de la app ---\n' + out.trim().split('\n').slice(-6).join('\n'));
 
   try { proc.kill(); } catch (_) { /* ignore */ }
   agent.dispose();

@@ -30,7 +30,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   };
 
   const before = await list();
-  console.log('启动前可见控制台窗口:', JSON.stringify(before));
+  console.log('Ventanas de consola visibles antes de iniciar:', JSON.stringify(before));
 
   // Igual que el proceso principal: detached + windowsHide + pipe
   const proc = spawn(EMU, [
@@ -56,23 +56,23 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const ours = l.filter((w) => w.ours);
     if (ours.length > sawConsole) {
       sawConsole = ours.length;
-      console.log(`[${(i + 1) * 0.5}s] 出现黑窗:`, JSON.stringify(ours));
+      console.log(`[${(i + 1) * 0.5} s] apareció una ventana negra:`, JSON.stringify(ours));
     }
   }
   const afterSpawn = (await list()).filter((w) => w.ours);
-  console.log('未压制时仍在画面上的黑窗:', JSON.stringify(afterSpawn));
+  console.log('Ventanas negras aún en pantalla sin supresión:', JSON.stringify(afterSpawn));
 
-  console.log('--- 打开 bootHide ---');
+  console.log('--- activando bootHide ---');
   const r = await agent.bootHide();
   console.log('bootHide:', JSON.stringify(r));
   await sleep(1500);
   const afterHide = (await list()).filter((w) => w.ours);
-  console.log('压制后剩余黑窗:', JSON.stringify(afterHide));
+  console.log('Ventanas negras que quedan tras suprimir:', JSON.stringify(afterHide));
 
   console.log('');
   console.log(afterHide.length === 0
-    ? `结果：通过（启动过程中出现过 ${sawConsole} 个黑窗，压制后全部不可见）`
-    : '结果：失败（仍有可见黑窗）');
+    ? `Resultado: correcto (durante el inicio aparecieron ${sawConsole} ventanas negras; tras suprimir ninguna es visible)`
+    : 'Resultado: fallido (aún hay ventanas negras visibles)');
 
   try { proc.kill(); } catch (_) { /* ignore */ }
   agent.dispose();

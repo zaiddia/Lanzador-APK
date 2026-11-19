@@ -113,7 +113,7 @@ async function render(layout, w, h) {
   const full = nativeImage.createFromBuffer((await win.webContents.capturePage()).toPNG());
   const got = full.getSize();
   if (got.width < w || got.height < h) {
-    console.log(`  [警告] 画布 ${got.width}x${got.height} 小于 ${w}x${h}，改用缩放`);
+    console.log(`  [advertencia] lienzo ${got.width}x${got.height} menor que ${w}x${h}, se usa escalado`);
     return full.resize({ width: w, height: h, quality: 'best' });
   }
   const x = Math.round((got.width - w) / 2);
@@ -126,41 +126,41 @@ function resized(img, w, h) {
 }
 
 app.whenReady().then(async () => {
-  console.log('渲染主标（square 1024）…');
+  console.log('Renderizando el logo principal (square 1024)…');
   const square = await render('square', SQ, SQ);
 
-  console.log('渲染宽磁贴（wide 620x300）…');
+  console.log('Renderizando el mosaico ancho (wide 620x300)…');
   const wide = await render('wide', 620, 300);
 
-  console.log('渲染启动图（splash 1240x600）…');
+  console.log('Renderizando la pantalla de inicio (splash 1240x600)…');
   const splash = await render('splash', 1240, 600);
 
   // Versión mosaico: recorta el margen transparente del logo para que llene el mosaico y el icono no se vea pequeño en el menú Inicio
   const tileBox = { x: TILE_PAD, y: TILE_PAD, width: SQ - TILE_PAD * 2, height: SQ - TILE_PAD * 2 };
   const tile = square.crop(tileBox);
   const tileSize = tile.getSize();
-  console.log(`主标磁贴区 ${tileSize.width}x${tileSize.height}（裁自 1024 中央）`);
+  console.log(`Zona de mosaico del logo principal ${tileSize.width}x${tileSize.height} (recortado del centro de 1024)`);
 
-  console.log('\n输出品牌图：');
+  console.log('\nGenerando imágenes de marca:');
   save(path.join(DOCS, 'logo.png'), square.toPNG());
   save(path.join(UI, 'logo.png'), resized(square, 512, 512));
   save(path.join(UI, 'logo-256.png'), resized(square, 256, 256));
   save(path.join(UI, 'logo-128.png'), resized(square, 128, 128));
   save(path.join(UI, 'logo-64.png'), resized(square, 64, 64));
 
-  console.log('\n输出托盘图（简化标）：');
+  console.log('\nGenerando iconos de bandeja (logo simplificado):');
   for (const s of [16, 20, 24, 32]) {
     save(path.join(UI, `tray-${s}.png`), drawAppIcon(s));
   }
 
-  console.log('\n输出 ICO（16–48 简化标 / 64–256 主标）：');
+  console.log('\nGenerando ICO (16–48 logo simplificado / 64–256 logo principal):');
   const icoEntries = [];
   for (const s of [16, 20, 24, 32, 40, 48]) icoEntries.push({ size: s, buf: drawAppIcon(s) });
   for (const s of [64, 128, 256]) icoEntries.push({ size: s, buf: resized(tile, s, s) });
   const ico = icoFrom(icoEntries);
   save(path.join(UI, 'appicon.ico'), ico);
 
-  console.log('\n输出商店资源：');
+  console.log('\nGenerando recursos de la Store:');
   save(path.join(STORE, 'StoreLogo.png'), drawAppIcon(50));
   save(path.join(STORE, 'Square44x44Logo.png'), drawAppIcon(44));
   save(path.join(STORE, 'Square71x71Logo.png'), drawAppIcon(71));
@@ -169,7 +169,7 @@ app.whenReady().then(async () => {
   save(path.join(STORE, 'Wide310x150Logo.png'), resized(wide, 310, 150));
   save(path.join(STORE, 'SplashScreen.png'), resized(splash, 620, 300));
 
-  console.log('\n完成。校验汇总：');
+  console.log('\nListo. Resumen de verificación:');
   const check = [
     ['logo-256.png', 256, 256], ['tray-16.png', 16, 16], ['tray-32.png', 32, 32],
     ['StoreLogo.png', 50, 50], ['Square44x44Logo.png', 44, 44], ['Square71x71Logo.png', 71, 71],
@@ -182,13 +182,13 @@ app.whenReady().then(async () => {
     const s = p ? pngSize(fs.readFileSync(p)) : null;
     const ok = !!s && s.w === w && s.h === h;
     if (!ok) bad += 1;
-    console.log(`  ${ok ? 'OK  ' : 'BAD '} ${name} ${s ? `${s.w}x${s.h}` : 'missing'} (期望 ${w}x${h})`);
+    console.log(`  ${ok ? 'OK  ' : 'BAD '} ${name} ${s ? `${s.w}x${s.h}` : 'missing'} (se esperaban ${w}x${h})`);
   }
   const icoBuf = fs.readFileSync(path.join(UI, 'appicon.ico'));
   const icoCount = icoBuf.readUInt16LE(4);
-  console.log(`  ${icoCount === 9 ? 'OK  ' : 'BAD '} appicon.ico ${icoCount} 个尺寸`);
+  console.log(`  ${icoCount === 9 ? 'OK  ' : 'BAD '} appicon.ico ${icoCount} tamaños`);
   app.exit(bad === 0 && icoCount === 9 ? 0 : 1);
 }).catch((e) => {
-  console.error('生成失败：', e);
+  console.error('Error al generar:', e);
   app.exit(1);
 });

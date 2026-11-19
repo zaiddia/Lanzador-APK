@@ -37,53 +37,53 @@ async function atest(name, fn) {
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'lanzadorapk-hardening-'));
 
 (async () => {
-  console.log('\n[issue #2 P0-1 · 包名校验]');
-  test('合法 Android 包名通过', () => {
+  console.log('\n[issue #2 P0-1 · validación del nombre de paquete]');
+  test('Los nombres de paquete Android válidos pasan', () => {
     for (const p of ['com.github.tvbox.osc', 'com.tencent.mm', 'org.example.app_2']) {
-      assert.equal(validPackageName(p), true, `${p} 应合法`);
+      assert.equal(validPackageName(p), true, `${p} debería ser válido`);
     }
   });
-  test('路径穿越 / 盘符 / shell 元字符 / 空格全部拒绝', () => {
+  test('Se rechazan recorrido de rutas / letras de unidad / metacaracteres de shell / espacios', () => {
     for (const p of ['../evil', 'com..x', '.com.x', 'com/x', 'com\\x', 'C:evil', 'a;rm -rf', 'a|b',
       'a b', 'a$(id)', 'a`id`', '', 'com.x.', '1com.x', 'com.x-y']) {
-      assert.equal(validPackageName(p), false, `${JSON.stringify(p)} 应被拒绝`);
+      assert.equal(validPackageName(p), false, `${JSON.stringify(p)} debería rechazarse`);
     }
   });
-  test('非法包名改写成安全文件名', () => {
+  test('Los nombres de paquete inválidos se convierten en nombres de archivo seguros', () => {
     const safe = safeFilePart('../evil');
-    assert.ok(!safe.includes('/') && !safe.includes('\\') && !safe.includes('..'), `改写后必须无路径字符：${safe}`);
+    assert.ok(!safe.includes('/') && !safe.includes('\\') && !safe.includes('..'), `Tras convertir no debe haber caracteres de ruta: ${safe}`);
     assert.equal(safeFilePart('com.ok.pkg'), 'com.ok.pkg');
   });
-  test('store 的图标/APK 路径无法逃出数据目录', () => {
+  test('Las rutas de iconos/APK de store no pueden salir de la carpeta de datos', () => {
     const icon = store.iconPath('../../Windows/System32/drivers/etc/hosts');
     const apk = store.apkPath('../../evil', '../../x');
-    assert.ok(!icon.includes('..'), `图标路径不应含 ..：${icon}`);
-    assert.ok(!apk.includes('..'), `APK 路径不应含 ..：${apk}`);
+    assert.ok(!icon.includes('..'), `La ruta del icono no debe contener ..: ${icon}`);
+    assert.ok(!apk.includes('..'), `La ruta del APK no debe contener ..: ${apk}`);
     assert.match(path.basename(apk), /\.apk$/);
   });
 
   console.log('\n[issue #2 P0-4 · zip-slip]');
-  test('正常相对路径放行', () => {
+  test('Las rutas relativas normales pasan', () => {
     const root = path.join(TMP, 'zip-ok');
     assert.equal(resolveZipEntry(root, 'emulator/qemu.exe'), path.join(root, 'emulator', 'qemu.exe'));
     assert.equal(resolveZipEntry(root, 'a/b/c.txt'), path.join(root, 'a', 'b', 'c.txt'));
   });
-  test('../ / 绝对路径 / 盘符 / 反斜杠穿越 / UNC 全部拒绝', () => {
+  test('Se rechazan ../ / rutas absolutas / letras de unidad / recorrido con barras invertidas / UNC', () => {
     const root = path.join(TMP, 'zip-root');
     for (const n of ['../evil', 'a/../../evil', '/etc/passwd', 'C:\\Windows\\x', 'C:/Windows/x',
       'a\\..\\..\\evil', '\\\\server\\share\\x', 'a/../b']) {
-      assert.equal(resolveZipEntry(root, n), null, `${JSON.stringify(n)} 应拒绝`);
+      assert.equal(resolveZipEntry(root, n), null, `${JSON.stringify(n)} debería rechazarse`);
     }
   });
-  test('provision 与 updater 源码都接上了 zip-slip 守卫', () => {
+  test('El código de provision y de updater usa la guardia contra zip-slip', () => {
     const prov = fs.readFileSync(path.join(__dirname, '..', 'src', 'core', 'provision.js'), 'utf8');
     const upd = fs.readFileSync(path.join(__dirname, '..', 'src', 'core', 'updater.js'), 'utf8');
-    assert.ok(/resolveZipEntry\(/.test(prov), 'provision.extractZip 必须校验条目名');
-    assert.ok(/resolveZipEntry\(/.test(upd), 'updater._extract 必须校验条目名');
+    assert.ok(/resolveZipEntry\(/.test(prov), 'provision.extractZip debe validar los nombres de entrada');
+    assert.ok(/resolveZipEntry\(/.test(upd), 'updater._extract debe validar los nombres de entrada');
   });
 
-  console.log('\n[issue #2 P1-1 · _fetchText 不再挂死]');
-  await atest('超上限时 Promise 能结算、不再永不 settle', async () => {
+  console.log('\n[issue #2 P1-1 · _fetchText ya no se cuelga]');
+  await atest('Al superar el límite la Promise se resuelve, ya no queda sin resolver para siempre', async () => {
     const srv = http.createServer((_req, res) => {
       res.writeHead(200, { 'Content-Length': String(64 * 1024) });
       res.end(Buffer.alloc(64 * 1024, 0x61));
@@ -94,40 +94,40 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'lanzadorapk-hardening-'));
       const p = new Provisioner({});
       const out = await Promise.race([
         p._fetchText(url, 1024),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('_fetchText 卡死未结算')), 5000)),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('_fetchText se colgó sin resolverse')), 5000)),
       ]);
-      assert.equal(out, '', '超限内容必须丢弃，不能把半截当完整');
+      assert.equal(out, '', 'El contenido que supera el límite debe descartarse; no se puede tomar lo parcial como completo');
     } finally {
       srv.close();
     }
   });
-  test('_fetchText 源码含一次性 settle 门闩与硬超时', () => {
+  test('El código de _fetchText tiene un cerrojo de resolución única y un tiempo límite estricto', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'core', 'provision.js'), 'utf8');
-    assert.ok(/let done = false/.test(src) && /const finish = \(\) =>/.test(src), '必须有一次性结算门闩');
-    assert.ok(/setTimeout/.test(src), '必须有硬超时兜底');
+    assert.ok(/let done = false/.test(src) && /const finish = \(\) =>/.test(src), 'Debe tener un cerrojo de resolución única');
+    assert.ok(/setTimeout/.test(src), 'Debe tener un tiempo límite estricto de respaldo');
   });
 
-  console.log('\n[issue #51 · 卸载器识别]');
-  test('electron-builder 的 Uninstall X.exe 能被识别为安装版', () => {
+  console.log('\n[issue #51 · detección del desinstalador]');
+  test('El Uninstall X.exe de electron-builder se reconoce como versión instalada', () => {
     const dir = path.join(TMP, 'uninst-a');
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, 'Uninstall LanzadorAPK.exe'), 'x');
     assert.equal(findUninstaller(dir), 'Uninstall LanzadorAPK.exe');
   });
-  test('老式 uninstaller.exe 同样识别', () => {
+  test('El uninstaller.exe antiguo también se reconoce', () => {
     const dir = path.join(TMP, 'uninst-b');
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, 'uninstaller.exe'), 'x');
     assert.equal(findUninstaller(dir), 'uninstaller.exe');
   });
-  test('便携版（无卸载器）返回 null', () => {
+  test('La versión portátil (sin desinstalador) devuelve null', () => {
     const dir = path.join(TMP, 'uninst-c');
     fs.mkdirSync(dir, { recursive: true });
     assert.equal(findUninstaller(dir), null);
   });
 
-  console.log('\n[issue #98 · 更新不重启死循环]');
-  await atest('已就绪的载荷可被找回续做，版本不符/缺 exe 则不可用', async () => {
+  console.log('\n[issue #98 · bucle infinito de actualización sin reinicio]');
+  await atest('Una carga lista puede recuperarse para continuar; con versión distinta o sin exe no sirve', async () => {
     const dataDir = path.join(TMP, 'upd-resume');
     const exe = path.join(dataDir, 'LanzadorAPK.exe');
     fs.mkdirSync(dataDir, { recursive: true });
@@ -137,19 +137,19 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'lanzadorapk-hardening-'));
     const payload = path.join(dataDir, 'update', '0.5.4', 'payload');
     fs.mkdirSync(payload, { recursive: true });
     fs.writeFileSync(path.join(payload, 'LanzadorAPK.exe'), 'new');
-    assert.equal(u.findResumableJob(), null, '没有就绪标记不应复用');
+    assert.equal(u.findResumableJob(), null, 'Sin marca de listo no debe reutilizarse');
     u._markPayloadReady(payload, '0.5.4');
     const job = u.findResumableJob();
-    assert.ok(job && job.version === '0.5.4', '应找回 0.5.4 的续做任务');
+    assert.ok(job && job.version === '0.5.4', 'Debería recuperar la tarea pendiente de 0.5.4');
 
     // Versión más vieja que la actual → no se reutiliza
     const cur = new Updater({ currentVersion: '0.5.4', exePath: exe, isPackaged: true, dataDir });
-    assert.equal(cur.findResumableJob(), null, '不低于当前版本的载荷不能续做');
+    assert.equal(cur.findResumableJob(), null, 'Una carga no inferior a la versión actual no puede continuarse');
     // La versión marcada no coincide → no se reutiliza
     fs.writeFileSync(u._readyFile(payload), JSON.stringify({ version: '0.5.2' }));
-    assert.equal(u.findResumableJob(), null, '标记版本不符不能复用');
+    assert.equal(u.findResumableJob(), null, 'Si la versión marcada no coincide no se puede reutilizar');
   });
-  test('apply 脚本用字节数校验替换成功，且保留失败载荷、有双路径重启', () => {
+  test('El script apply verifica el reemplazo por número de bytes, conserva la carga si falla y reinicia por dos rutas', () => {
     const dataDir = path.join(TMP, 'upd-apply');
     const exe = path.join(dataDir, 'LanzadorAPK.exe');
     fs.mkdirSync(dataDir, { recursive: true });
@@ -159,15 +159,15 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'lanzadorapk-hardening-'));
     fs.mkdirSync(payload, { recursive: true });
     fs.writeFileSync(path.join(payload, 'LanzadorAPK.exe'), 'new-version-bytes');
     const script = u.apply({ mode: 'zip', payload, version: '0.5.4' }, { spawn: false });
-    assert.ok(/\(Get-Item \$target\)\.Length -eq \$expected/.test(script), '必须按字节数验证新 exe');
-    assert.ok(/keeping payload for next launch/.test(script), '复制失败必须保留载荷供续做');
-    assert.ok(/Start-Process -FilePath/.test(script) && /cmd\.exe/.test(script), '重启必须有兜底路径');
+    assert.ok(/\(Get-Item \$target\)\.Length -eq \$expected/.test(script), 'Debe verificar el exe nuevo por número de bytes');
+    assert.ok(/keeping payload for next launch/.test(script), 'Si la copia falla debe conservarse la carga para continuar');
+    assert.ok(/Start-Process -FilePath/.test(script) && /cmd\.exe/.test(script), 'El reinicio debe tener una ruta de respaldo');
   });
 
-  console.log(`\n结果：${passed} 通过，${failed} 失败\n`);
+  console.log(`\nResultado: ${passed} correctas, ${failed} fallidas\n`);
   fs.rmSync(TMP, { recursive: true, force: true });
   process.exit(failed ? 1 : 0);
 })().catch((e) => {
-  console.error('  异常：', e.stack || e.message);
+  console.error('  Error:', e.stack || e.message);
   process.exit(1);
 });

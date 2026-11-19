@@ -34,23 +34,23 @@ function serve(handler) {
 const baseOf = (server) => `http://127.0.0.1:${server.address().port}`;
 
 (async () => {
-  console.log('\n[download.js Content-Range 校验]');
+  console.log('\n[download.js validación de Content-Range]');
 
-  test('validRange 接受完全匹配的响应', () => {
+  test('validRange acepta respuestas que coinciden por completo', () => {
     const res = { headers: { 'content-range': 'bytes 100-199/500', 'content-length': '100' } };
     assert.equal(validRange(res, 100, 199, 500), true);
   });
-  test('validRange 容忍缺失的 Content-Length', () => {
+  test('validRange tolera que falte Content-Length', () => {
     const res = { headers: { 'content-range': 'bytes 100-199/500' } };
     assert.equal(validRange(res, 100, 199, 500), true);
   });
-  test('validRange 拒绝错误起点/终点/总大小/长度', () => {
+  test('validRange rechaza inicio/fin/tamaño total/longitud erróneos', () => {
     const hdr = (cr, len) => ({ headers: { 'content-range': cr, 'content-length': len } });
-    assert.equal(validRange(hdr('bytes 101-199/500', '99'), 100, 199, 500), false, '起点不符');
-    assert.equal(validRange(hdr('bytes 100-198/500', '99'), 100, 199, 500), false, '终点不符');
-    assert.equal(validRange(hdr('bytes 100-199/400', '100'), 100, 199, 500), false, '总大小不符');
-    assert.equal(validRange(hdr('bytes 100-199/500', '99'), 100, 199, 500), false, '长度不符');
-    assert.equal(validRange(hdr('', '100'), 100, 199, 500), false, '缺少 Content-Range');
+    assert.equal(validRange(hdr('bytes 101-199/500', '99'), 100, 199, 500), false, 'El inicio no coincide');
+    assert.equal(validRange(hdr('bytes 100-198/500', '99'), 100, 199, 500), false, 'El fin no coincide');
+    assert.equal(validRange(hdr('bytes 100-199/400', '100'), 100, 199, 500), false, 'El tamaño total no coincide');
+    assert.equal(validRange(hdr('bytes 100-199/500', '99'), 100, 199, 500), false, 'La longitud no coincide');
+    assert.equal(validRange(hdr('', '100'), 100, 199, 500), false, 'Falta Content-Range');
     assert.equal(validRange(hdr('bytes 0-3/8', '4'), 0, 3, 8), true);
   });
 
@@ -78,29 +78,29 @@ const baseOf = (server) => `http://127.0.0.1:${server.address().port}`;
     });
     const base = baseOf(server);
     try {
-      await atest('单流 416：丢弃坏残片并重新完整下载', async () => {
+      await atest('416 con una sola conexión: descarta el fragmento dañado y vuelve a descargar todo', async () => {
         const out = path.join(dir, 'one');
         fs.writeFileSync(out, 'corrupt data');
         await download(`${base}/416`, out);
         assert.equal(fs.readFileSync(out, 'utf8'), 'good');
       });
 
-      await atest('单流 206 范围不符时拒绝', async () => {
+      await atest('Con una sola conexión se rechaza un 206 con rango que no coincide', async () => {
         const out = path.join(dir, 'resume');
         fs.writeFileSync(out, 'xxxx'); // Hace que la petición lleve Range: bytes=4-
         await assert.rejects(download(`${base}/bad`, out), /rango/);
       });
 
-      await atest('downloadParallel 范围不符时拒绝，不留半截文件', async () => {
+      await atest('downloadParallel rechaza rangos que no coinciden y no deja archivos a medias', async () => {
         const out = path.join(dir, 'two');
         await assert.rejects(
           downloadParallel(`${base}/bad`, out, { connections: 2, minChunk: 2, retries: 1 }),
           /rango/,
         );
-        assert.equal(fs.existsSync(out), false, '失败后目标文件应被清理');
+        assert.equal(fs.existsSync(out), false, 'Tras fallar, el archivo de destino debería limpiarse');
       });
 
-      await atest('downloadMulti 范围不符时拒绝', async () => {
+      await atest('downloadMulti rechaza rangos que no coinciden', async () => {
         const out = path.join(dir, 'three');
         await assert.rejects(
           downloadMulti([`${base}/bad1`, `${base}/bad2`], out, { connections: 2, minChunk: 2, retries: 1 }),
@@ -108,7 +108,7 @@ const baseOf = (server) => `http://127.0.0.1:${server.address().port}`;
         );
       });
 
-      await atest('合法范围下载仍然成功（无回归）', async () => {
+      await atest('Con rangos válidos la descarga sigue funcionando (sin regresión)', async () => {
         const out = path.join(dir, 'ok');
         const r = await download(`${base}/ok`, out, { retries: 1 });
         assert.equal(fs.readFileSync(out, 'utf8'), 'abcdefgh');
@@ -121,6 +121,6 @@ const baseOf = (server) => `http://127.0.0.1:${server.address().port}`;
     fs.rmSync(dir, { recursive: true, force: true });
   }
 
-  console.log(`\n结果：${passed} 通过，${failed} 失败\n`);
+  console.log(`\nResultado: ${passed} correctas, ${failed} fallidas\n`);
   process.exit(failed ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

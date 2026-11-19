@@ -24,16 +24,16 @@ const path = require('path');
  * Solo se buscan los nombres característicos de cada emulador, nada genérico como /android/, para evitar falsos positivos.
  */
 const BANNED = [
-  { re: /^mumu/i, vendor: 'MuMu 模拟器' },          // MuMuManager.exe / MuMuPlayer.exe / MuMuVMMVbox
-  { re: /\.nemu$/i, vendor: 'MuMu 模拟器' },        // archivo de instancia MuMuPlayer-12.0-0.nemu
-  { re: /^nemu$/i, vendor: 'MuMu 模拟器' },         // carpeta nemu de MuMu
-  { re: /^nx_main$/i, vendor: 'MuMu 模拟器' },      // carpetas nx_main / nx_device de MuMu
-  { re: /^nx_device$/i, vendor: 'MuMu 模拟器' },
-  { re: /^ldplayer/i, vendor: '雷电模拟器' },
-  { re: /^dnplayer/i, vendor: '雷电模拟器' },
-  { re: /^bluestacks/i, vendor: '蓝叠模拟器' },
-  { re: /^hd-player/i, vendor: '蓝叠模拟器' },
-  { re: /^mgalaxy/i, vendor: 'MEmu 模拟器' },
+  { re: /^mumu/i, vendor: 'emulador MuMu' },          // MuMuManager.exe / MuMuPlayer.exe / MuMuVMMVbox
+  { re: /\.nemu$/i, vendor: 'emulador MuMu' },        // archivo de instancia MuMuPlayer-12.0-0.nemu
+  { re: /^nemu$/i, vendor: 'emulador MuMu' },         // carpeta nemu de MuMu
+  { re: /^nx_main$/i, vendor: 'emulador MuMu' },      // carpetas nx_main / nx_device de MuMu
+  { re: /^nx_device$/i, vendor: 'emulador MuMu' },
+  { re: /^ldplayer/i, vendor: 'emulador LDPlayer' },
+  { re: /^dnplayer/i, vendor: 'emulador LDPlayer' },
+  { re: /^bluestacks/i, vendor: 'emulador BlueStacks' },
+  { re: /^hd-player/i, vendor: 'emulador BlueStacks' },
+  { re: /^mgalaxy/i, vendor: 'emulador MEmu' },
 ];
 
 /** Solo estas extensiones cuentan como «el emulador en sí»; .js/.md/.json son código y configuración y no se bloquean */
@@ -75,10 +75,10 @@ function findBundled(dir, { limit = 20 } = {}) {
  * Son .js y no están en BINARY_EXT, así que se revisan aparte.
  */
 const BANNED_SOURCE = [
-  { re: /^mumu\.js$/i, what: 'MuMu 底座适配器' },
-  { re: /^fydeos\.js$/i, what: 'FydeOS 底座适配器' },
-  { re: /^mumu-compat\.js$/i, what: 'MuMu 兼容策略' },
-  { re: /^frame\.js$/i, what: 'MuMu 帧体检' },
+  { re: /^mumu\.js$/i, what: 'adaptador de base MuMu' },
+  { re: /^fydeos\.js$/i, what: 'adaptador de base FydeOS' },
+  { re: /^mumu-compat\.js$/i, what: 'estrategia de compatibilidad MuMu' },
+  { re: /^frame\.js$/i, what: 'revisión de fotogramas MuMu' },
 ];
 
 /**
@@ -117,18 +117,18 @@ function findForbiddenSource(dir) {
  * @param {object} [opts] { label, exit } label se usa en el aviso; exit=false solo devuelve el resultado sin terminar el proceso
  * @returns {{ok: boolean, skipped?: boolean, hits: Array}}
  */
-function assertStandalone(dir, { label = '打包产物', exit = true } = {}) {
+function assertStandalone(dir, { label = 'artefactos del empaquetado', exit = true } = {}) {
   if (!dir || !fs.existsSync(dir)) return { ok: true, skipped: true, hits: [] };
   const hits = findBundled(dir).concat(findForbiddenSource(dir));
   if (!hits.length) return { ok: true, hits: [] };
 
   const vendors = [...new Set(hits.map((h) => h.vendor))].join(' / ');
-  console.error(`\n[守卫] ${label} 里混进了第三方模拟器（${vendors}）：`);
+  console.error(`\n[guardia] ${label} contiene emuladores de terceros (${vendors}):`);
   for (const h of hits) console.error(`  - ${h.path}`);
   console.error('');
-  console.error('LanzadorAPK 的安装包必须自带运行时、独立运行：不能依赖、不能捆绑别的模拟器，');
-  console.error('也不允许把「接管别人模拟器」的适配器源码带回来。');
-  console.error('请把上面这些路径从打包目录里删掉后重试。\n');
+  console.error('El instalador de LanzadorAPK debe traer su propio runtime y funcionar solo: no puede depender de otros emuladores ni incluirlos,');
+  console.error('y tampoco se permite volver a traer el código de adaptadores que «toman el control de otros emuladores».');
+  console.error('Borra esas rutas de la carpeta de empaquetado y vuelve a intentarlo.\n');
   if (exit) process.exit(4);
   return { ok: false, hits };
 }

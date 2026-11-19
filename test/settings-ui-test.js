@@ -127,12 +127,12 @@ app.whenReady().then(async () => {
 
   const evalJs = (code) => win.webContents.executeJavaScript(code, true);
 
-  console.log('\n[设置页 · 分类导航]');
+  console.log('\n[Configuración · navegación por categorías]');
   // Primero se abre el diálogo de configuración (los resultados de la comprobación automática se obtienen y muestran al abrirlo)
   await evalJs(`document.getElementById('btnSettings').click()`);
   await new Promise((r) => setTimeout(r, 900));
   const modalOpen = await evalJs(`document.getElementById('settingsMask').classList.contains('on')`);
-  step('设置弹窗能打开', modalOpen);
+  step('El diálogo de configuración se abre', modalOpen);
 
   const navInfo = await evalJs(`(() => ({
     items: document.querySelectorAll('#setNav .set-nav-item').length,
@@ -140,10 +140,10 @@ app.whenReady().then(async () => {
     groups: document.querySelectorAll('#settingsBody [data-cat]').length,
     visible: Array.from(document.querySelectorAll('#settingsBody [data-cat]')).filter(g => !g.hidden).map(g => g.dataset.cat),
   }))()`);
-  step('导航项渲染出来了', navInfo.items === 8, `${navInfo.items} 项`);
+  step('Se dibujaron los elementos de navegación', navInfo.items === 8, `${navInfo.items} elementos`);
   // Ojo: la categoría se recuerda (localStorage), así que aquí solo se afirma que «en cada momento solo se ven los grupos de una categoría»
   const oneCat = navInfo.visible.length > 0 && navInfo.visible.every((c) => c === navInfo.visible[0]);
-  step('同一时刻只显示一个分类的分组', oneCat, `默认可见：${navInfo.visible.join(',')}`);
+  step('En cada momento solo se ven los grupos de una categoría', oneCat, `Visibles por defecto: ${navInfo.visible.join(',')}`);
 
   // Pulsar «Pantalla y ventana»
   await evalJs(`document.querySelector('#setNav .set-nav-item[data-cat="display"]').click()`);
@@ -152,8 +152,8 @@ app.whenReady().then(async () => {
     visible: Array.from(document.querySelectorAll('#settingsBody [data-cat]')).filter(g => !g.hidden).map(g => g.dataset.cat),
     on: document.querySelector('#setNav .set-nav-item.on') ? document.querySelector('#setNav .set-nav-item.on').dataset.cat : '',
   }))()`);
-  step('切到「显示与窗口」后只显示该分类', afterSwitch.visible.length > 0 && afterSwitch.visible.every((c) => c === 'display'), `可见：${afterSwitch.visible.join(',')}`);
-  step('导航高亮跟着切换', afterSwitch.on === 'display', `高亮：${afterSwitch.on}`);
+  step('Al pasar a «Pantalla y ventana» solo se ve esa categoría', afterSwitch.visible.length > 0 && afterSwitch.visible.every((c) => c === 'display'), `Visibles: ${afterSwitch.visible.join(',')}`);
+  step('El resaltado de la navegación cambia también', afterSwitch.on === 'display', `Resaltado: ${afterSwitch.on}`);
 
   await win.capturePage().then((img) => fs.writeFileSync(path.join(OUT, 'settings-display.png'), img.toPNG()));
 
@@ -167,17 +167,17 @@ app.whenReady().then(async () => {
     text: (document.getElementById('autodebugStateText') || {}).textContent || '',
     fixBtns: document.querySelectorAll('#autodebugList .dbg-fix').length,
   }))()`);
-  step('「诊断与修复」下能看到本机体检、驱动与自动检测', diag.visible.includes('diag') && diag.visible.length === 3, `可见：${diag.visible.join(',')}`);
-  step('自动检测结果按分类分组渲染', diag.groups >= 3 && diag.items === 3, `${diag.groups} 组 / ${diag.items} 项`);
-  step('每条问题都有「处理」按钮', diag.fixBtns === 3, `${diag.fixBtns} 个按钮`);
-  step('状态行显示上次检测时间', /Última comprobación/.test(diag.text), diag.text);
+  step('En «Diagnóstico y reparación» se ven la revisión del equipo, los controladores y la comprobación automática', diag.visible.includes('diag') && diag.visible.length === 3, `Visibles: ${diag.visible.join(',')}`);
+  step('Los resultados de la comprobación automática se agrupan por categoría', diag.groups >= 3 && diag.items === 3, `${diag.groups} grupos / ${diag.items} elementos`);
+  step('Cada problema tiene un botón «Resolver»', diag.fixBtns === 3, `${diag.fixBtns} botones`);
+  step('La línea de estado muestra la hora de la última comprobación', /Última comprobación/.test(diag.text), diag.text);
 
   // Desplazarse al panel de comprobación automática y capturar (esperando al compositor para no capturar el fotograma anterior)
   await evalJs(`document.getElementById('autodebugGroup').scrollIntoView({ block: 'start' })`);
   await new Promise((r) => setTimeout(r, 900));
   await win.capturePage().then((img) => fs.writeFileSync(path.join(OUT, 'settings-diag.png'), img.toPNG()));
 
-  console.log('\n[设置页 · 搜索]');
+  console.log('\n[Configuración · búsqueda]');
   await evalJs(`(() => { const s = document.getElementById('setSearch'); s.value = 'horizontal'; s.dispatchEvent(new Event('input')); })()`);
   await new Promise((r) => setTimeout(r, 300));
   const search = await evalJs(`(() => ({
@@ -185,26 +185,26 @@ app.whenReady().then(async () => {
     names: Array.from(document.querySelectorAll('#settingsBody [data-cat]')).filter(g => !g.hidden).map(g => (g.querySelector('.group-title')||{}).textContent),
     clearVisible: !document.getElementById('btnClearSearch').hidden,
   }))()`);
-  step('搜索「横屏」能命中分组', search.visible >= 1, `命中 ${search.visible} 个：${search.names.join(' / ')}`);
-  step('命中项跨分类可见（不会被当前分类挡住）', search.visible >= 1);
-  step('清除按钮出现', search.clearVisible);
+  step('Buscar «horizontal» encuentra grupos', search.visible >= 1, `Coincidencias: ${search.visible} elementos: ${search.names.join(' / ')}`);
+  step('Las coincidencias se ven en todas las categorías (la categoría actual no las tapa)', search.visible >= 1);
+  step('Aparece el botón de borrar', search.clearVisible);
 
   await win.capturePage().then((img) => fs.writeFileSync(path.join(OUT, 'settings-search.png'), img.toPNG()));
 
   await evalJs(`document.getElementById('btnClearSearch').click()`);
   await new Promise((r) => setTimeout(r, 250));
   const afterClear = await evalJs(`(() => Array.from(document.querySelectorAll('#settingsBody [data-cat]')).filter(g => !g.hidden).map(g => g.dataset.cat))()`);
-  step('清除搜索后回到当前分类', afterClear.length > 0 && afterClear.every((c) => c === 'diag'), `可见：${afterClear.join(',')}`);
+  step('Al borrar la búsqueda se vuelve a la categoría actual', afterClear.length > 0 && afterClear.every((c) => c === 'diag'), `Visibles: ${afterClear.join(',')}`);
 
-  console.log('\n[设置页 · 记忆分类]');
+  console.log('\n[Configuración · memoria de categoría]');
   const remembered = await evalJs(`localStorage.getItem('lanzadorapk.settings.cat')`);
-  step('上次停留的分类被记住了', remembered === 'diag', `记住了：${remembered}`);
+  step('Se recordó la última categoría visitada', remembered === 'diag', `Recordada: ${remembered}`);
 
-  console.log('\n[设置页 · 渲染无异常]');
+  console.log('\n[Configuración · se dibuja sin errores]');
   const realErrors = errors.filter((e) => !/Autofill|devtools|Request Autofill/i.test(e));
-  step('控制台没有报错', realErrors.length === 0, realErrors.slice(0, 3).join(' | '));
+  step('La consola no tiene errores', realErrors.length === 0, realErrors.slice(0, 3).join(' | '));
 
-  console.log(`\n结果：${passed} 通过，${failed} 失败`);
+  console.log(`\nResultado: ${passed} correctas, ${failed} fallidas`);
   app.exit(failed ? 1 : 0);
 }).catch((e) => {
   console.error(e);

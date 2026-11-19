@@ -79,7 +79,7 @@ function zipWith7z(exe, srcDir, outZip, level = 9) {
     windowsHide: true,
   });
   if (r.status !== 0) {
-    throw new Error(`7-Zip 压缩失败（${r.status}）：${String(r.stderr || r.stdout || '').slice(0, 400)}`);
+    throw new Error(`7-Zip falló al comprimir (${r.status}): ${String(r.stderr || r.stdout || '').slice(0, 400)}`);
   }
 }
 
@@ -91,7 +91,7 @@ function zipWithPowershell(srcDir, outZip) {
     windowsHide: true,
   });
   if (r.status !== 0) {
-    throw new Error(`Compress-Archive 失败：${String(r.stderr || '').slice(0, 400)}`);
+    throw new Error(`Compress-Archive falló: ${String(r.stderr || '').slice(0, 400)}`);
   }
 }
 
@@ -104,10 +104,10 @@ function verify(zipPath, expect) {
     let bytes = 0;
     for (const n of names) bytes += zip.entries.get(n).uncompSize;
     if (names.length !== expect.files) {
-      throw new Error(`条目数不符：包内 ${names.length}，源目录 ${expect.files}`);
+      throw new Error(`El número de entradas no coincide: en el paquete ${names.length}, en la carpeta de origen ${expect.files}`);
     }
     if (bytes !== expect.bytes) {
-      throw new Error(`解压总字节不符：包内 ${bytes}，源目录 ${expect.bytes}`);
+      throw new Error(`El total de bytes descomprimidos no coincide: en el paquete ${bytes}, en la carpeta de origen ${expect.bytes}`);
     }
     return names.length;
   } finally {
@@ -121,33 +121,33 @@ function main() {
   const limArg = process.argv.indexOf('--limit-mb');
   const limitMiB = limArg > 0 ? Number(process.argv[limArg + 1]) : 100;
   if (!srcDir || !fs.existsSync(srcDir) || !outZip) {
-    console.error('用法：node build/zip.js <源目录> <输出.zip> [--limit-mb 100]');
+    console.error('Uso: node build/zip.js <carpeta origen> <salida.zip> [--limit-mb 100]');
     process.exit(1);
   }
 
   const stats = dirStats(srcDir);
-  console.log(`压缩 ${srcDir}（${stats.files} 个文件，${(stats.bytes / MIB).toFixed(1)} MB）`);
+  console.log(`Comprimiendo ${srcDir} (${stats.files} archivos, ${(stats.bytes / MIB).toFixed(1)} MB)`);
   fs.rmSync(outZip, { force: true });
 
   const exe = find7z();
   if (exe) {
-    console.log('压缩器：', exe);
+    console.log('Compresor:', exe);
     zipWith7z(exe, srcDir, outZip);
   } else {
-    console.warn('⚠️  没找到 7-Zip，退回 Compress-Archive —— 产物会大 5% 左右，可能装不进 Gitee 单文件限额');
+    console.warn('⚠️  No se encontró 7-Zip; se usa Compress-Archive: el resultado será ~5 % más grande y podría pasar el límite de 100 MiB por archivo');
     zipWithPowershell(srcDir, outZip);
   }
 
   const size = fs.statSync(outZip).size;
   const entries = verify(outZip, stats);
-  console.log(`完成：${outZip}`);
-  console.log(`  ${entries} 个条目，${size} 字节（${(size / MIB).toFixed(2)} MiB），压缩率 ${(size / stats.bytes * 100).toFixed(1)}%`);
+  console.log(`Listo: ${outZip}`);
+  console.log(`  ${entries} entradas, ${size} bytes (${(size / MIB).toFixed(2)} MiB), compresión ${(size / stats.bytes * 100).toFixed(1)}%`);
 
   if (size > limitMiB * MIB) {
-    console.error(`✗ 超过 ${limitMiB} MiB 上限（Gitee 附件单文件上限 100MB）。请先给包瘦身，不要靠切分片绕过。`);
+    console.error(`✗ Supera el límite de ${limitMiB} MiB (límite de 100 MiB por archivo). Reduce el paquete primero; no lo dividas en partes para esquivarlo.`);
     process.exit(2);
   }
-  console.log(`  ✓ 在 ${limitMiB} MiB 以内（余量 ${((limitMiB * MIB - size) / MIB).toFixed(2)} MiB）`);
+  console.log(`  ✓ Dentro de ${limitMiB} MiB (margen ${((limitMiB * MIB - size) / MIB).toFixed(2)} MiB)`);
 }
 
 if (require.main === module) main();

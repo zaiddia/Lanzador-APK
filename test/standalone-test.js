@@ -43,151 +43,151 @@ function touch(dir, rel, bytes = 8) {
 }
 
 (() => {
-  console.log('\n[独立运行 · 只有一个底座]');
+  console.log('\n[Funcionamiento independiente · una sola base]');
 
   const store = require('../src/core/store');
   const settings = store.getSettings();
 
-  test('默认引擎是自带运行时', () => {
-    assert.equal(settings.engine.mode, 'builtin', `默认 mode=${settings.engine.mode}`);
+  test('El motor por defecto es el runtime propio', () => {
+    assert.equal(settings.engine.mode, 'builtin', `mode por defecto=${settings.engine.mode}`);
   });
 
-  test('注册表里只有 builtin，没有第二个底座', () => {
-    assert.equal(backends.REGISTRY.length, 1, `注册表有 ${backends.REGISTRY.length} 个底座`);
+  test('En el registro solo está builtin, no hay segunda base', () => {
+    assert.equal(backends.REGISTRY.length, 1, `El registro tiene ${backends.REGISTRY.length} bases`);
     assert.deepEqual(backends.describe().map((d) => d.id), ['builtin']);
   });
 
-  test('任何残留的 mode 都只会创建 builtin（mumu / fydeos / attach / 乱填）', () => {
+  test('Cualquier mode que quede solo crea builtin (mumu / fydeos / attach / cualquier valor)', () => {
     for (const mode of ['mumu', 'fydeos', 'attach', 'ldplayer', 'whatever', '']) {
       const made = backends.create({
         appRoot: ROOT, settings: { engine: { mode } }, store, log: () => {},
       });
-      assert.equal(made.id, 'builtin', `mode=${mode} 却创建了 ${made.id}`);
-      assert.equal(made.backend.constructor.id, 'builtin', '实例类型不是 BuiltinBackend');
+      assert.equal(made.id, 'builtin', `mode=${mode} creó ${made.id}`);
+      assert.equal(made.backend.constructor.id, 'builtin', 'El tipo de instancia no es BuiltinBackend');
     }
   });
 
-  test('显式传别的 id 也压不过去（回退路径不会再建出第三方底座）', () => {
+  test('Pasar otro id explícito tampoco lo cambia (la ruta de respaldo ya no crea bases de terceros)', () => {
     const made = backends.create({
       appRoot: ROOT, settings: { engine: { mode: 'builtin' } }, store, log: () => {}, id: 'mumu',
     });
-    assert.equal(made.id, 'builtin', '显式 id=mumu 仍然被接受了');
+    assert.equal(made.id, 'builtin', '¡Se aceptó id=mumu explícito!');
   });
 
-  test('自动挑选不再探测任何外部运行时', async () => {
+  test('La elección automática ya no busca runtimes externos', async () => {
     // Aserción síncrona: autoPick debe «devolver builtin directamente»; en el código no puede aparecer probe()
     const src = read('src', 'core', 'backends', 'index.js');
-    assert(!/\.probe\(/.test(src), '注册表仍在探测外部模拟器');
+    assert(!/\.probe\(/.test(src), 'El registro todavía busca emuladores externos');
     assert(!/mumu|fydeos|ldplayer|bluestacks/i.test(src.replace(/[\s\S]*?const REGISTRY[\s\S]*?\];/, '')),
-      '注册表里还有第三方底座');
+      'El registro todavía tiene bases de terceros');
   });
 
-  console.log('\n[独立运行 · 第三方底座代码已删除]');
+  console.log('\n[Funcionamiento independiente · código de bases de terceros eliminado]');
 
-  test('backends/ 下只有 base / builtin / index', () => {
+  test('En backends/ solo están base / builtin / index', () => {
     const files = fs.readdirSync(path.join(ROOT, 'src', 'core', 'backends')).sort();
-    assert.deepEqual(files, ['base.js', 'builtin.js', 'index.js'], `实际：${files.join(', ')}`);
+    assert.deepEqual(files, ['base.js', 'builtin.js', 'index.js'], `Real: ${files.join(', ')}`);
   });
 
-  test('mumu / fydeos / mumu-compat / frame 模块都不在了', () => {
+  test('Ya no existen los módulos mumu / fydeos / mumu-compat / frame', () => {
     for (const rel of [
       ['src', 'core', 'backends', 'mumu.js'],
       ['src', 'core', 'backends', 'fydeos.js'],
       ['src', 'core', 'mumu-compat.js'],
       ['src', 'core', 'frame.js'],
     ]) {
-      assert.equal(exists(...rel), false, `${rel.join('/')} 仍然存在`);
+      assert.equal(exists(...rel), false, `${rel.join('/')} todavía existe`);
     }
   });
 
-  test('引擎里没有「第三方底座不可用 → 回退」这类分支', () => {
+  test('El motor no tiene ramas del tipo «base de terceros no disponible → respaldo»', () => {
     const src = read('src', 'core', 'engine.js');
-    assert(!/_fallbackFrom/.test(src), '还留着第三方底座的回退标记');
-    assert(!/backend\.id !== 'builtin'/.test(src), '还有按底座 id 分叉的逻辑');
-    assert(!/engine\.mode === 'attach'/.test(src), '还有 attach（连接已有运行时）分支');
-    assert(!/ATTACH_ENDPOINTS/.test(src), '还在探测外部模拟器的 adb 端口');
+    assert(!/_fallbackFrom/.test(src), 'Todavía queda la marca de respaldo de bases de terceros');
+    assert(!/backend\.id !== 'builtin'/.test(src), 'Todavía hay lógica que se bifurca según el id de base');
+    assert(!/engine\.mode === 'attach'/.test(src), 'Todavía hay una rama attach (conectar a un runtime existente)');
+    assert(!/ATTACH_ENDPOINTS/.test(src), 'Todavía se buscan los puertos adb de emuladores externos');
   });
 
-  test('设置页没有引擎模式下拉，也没有 MuMu / FydeOS 字段', () => {
+  test('La configuración no tiene la lista de modo de motor ni campos de MuMu / FydeOS', () => {
     const html = read('src', 'ui', 'index.html');
-    assert(!/setEngineMode/.test(html), '设置页仍有引擎模式下拉');
-    assert(!/value="mumu"|value="fydeos"|value="attach"/.test(html), '设置页仍有第三方选项');
-    assert(!/setMumuPath|setMumuMemGB|setMumuCores|setFydeosHost/.test(html), '设置页仍有第三方字段');
-    assert(/id="setEngineLabel"/.test(html), '设置页缺少只读的运行时说明');
+    assert(!/setEngineMode/.test(html), 'La configuración todavía tiene la lista de modo de motor');
+    assert(!/value="mumu"|value="fydeos"|value="attach"/.test(html), 'La configuración todavía tiene opciones de terceros');
+    assert(!/setMumuPath|setMumuMemGB|setMumuCores|setFydeosHost/.test(html), 'La configuración todavía tiene campos de terceros');
+    assert(/id="setEngineLabel"/.test(html), 'A la configuración le falta la explicación de solo lectura del runtime');
   });
 
-  test('持久化层把残留的 mode / mumu* 字段就地改写', () => {
+  test('La capa de persistencia reescribe en el lugar los campos mode / mumu* que quedan', () => {
     const src = read('src', 'core', 'store.js');
-    assert(/s\.engine\.mode = 'builtin'/.test(src), 'getSettings 没有强制 mode=builtin');
-    assert(/mumuPath/.test(src) && /delete s\.engine\[k\]/.test(src), '没有清理残留的第三方字段');
+    assert(/s\.engine\.mode = 'builtin'/.test(src), 'getSettings no fuerza mode=builtin');
+    assert(/mumuPath/.test(src) && /delete s\.engine\[k\]/.test(src), 'No se limpian los campos de terceros que quedan');
   });
 
-  test('adb 候选路径不含第三方模拟器自带的 adb', () => {
+  test('Las rutas candidatas de adb no incluyen el adb de emuladores de terceros', () => {
     const src = read('src', 'core', 'adb.js');
     const block = src.slice(src.indexOf('const COMMON_ADB_PATHS'), src.indexOf('];', src.indexOf('const COMMON_ADB_PATHS')));
-    assert(!/mumu|ldplayer|bluestacks|hd-adb/i.test(block), '仍在借用第三方模拟器的 adb');
+    assert(!/mumu|ldplayer|bluestacks|hd-adb/i.test(block), 'Todavía se usa el adb de un emulador de terceros');
   });
 
-  console.log('\n[独立运行 · 包内不许有别的模拟器]');
+  console.log('\n[Funcionamiento independiente · el paquete no puede llevar otros emuladores]');
 
-  test('守卫能认出 MuMu 二进制', () => {
+  test('La guardia reconoce los binarios de MuMu', () => {
     const d = tmpDir('guard-hit');
     touch(d, 'runtime/MuMuManager.exe');
     const hits = findBundled(d);
-    assert.equal(hits.length, 1, `命中数 ${hits.length}`);
-    assert.equal(hits[0].vendor, 'MuMu 模拟器');
+    assert.equal(hits.length, 1, `Coincidencias: ${hits.length}`);
+    assert.equal(hits[0].vendor, 'emulador MuMu');
     fs.rmSync(d, { recursive: true, force: true });
   });
 
-  test('守卫能认出 MuMu 的目录（nx_main / nx_device / nemu）', () => {
+  test('La guardia reconoce las carpetas de MuMu (nx_main / nx_device / nemu)', () => {
     for (const dirName of ['nx_main', 'nx_device', 'nemu']) {
       const d = tmpDir('guard-dir');
       fs.mkdirSync(path.join(d, dirName), { recursive: true });
       touch(d, path.join(dirName, 'whatever.bin'));
-      assert.equal(findBundled(d).length, 1, `${dirName} 没被拦下`);
+      assert.equal(findBundled(d).length, 1, `${dirName} no se bloqueó`);
       fs.rmSync(d, { recursive: true, force: true });
     }
   });
 
-  test('守卫也认雷电 / 蓝叠', () => {
+  test('La guardia también reconoce LDPlayer / BlueStacks', () => {
     const d = tmpDir('guard-others');
     touch(d, 'runtime/LDPlayer.exe');
     touch(d, 'runtime/Bluestacks.exe');
     const vendors = new Set(findBundled(d).map((h) => h.vendor));
-    assert.ok(vendors.has('雷电模拟器'), '雷电没被拦下');
-    assert.ok(vendors.has('蓝叠模拟器'), '蓝叠没被拦下');
+    assert.ok(vendors.has('emulador LDPlayer'), 'LDPlayer no se bloqueó');
+    assert.ok(vendors.has('emulador BlueStacks'), 'BlueStacks no se bloqueó');
     fs.rmSync(d, { recursive: true, force: true });
   });
 
-  test('守卫不会误伤我们自己的运行时', () => {
+  test('La guardia no afecta por error a nuestro propio runtime', () => {
     const d = tmpDir('guard-src');
     touch(d, 'app/src/core/backends/builtin.js', 64);
     touch(d, 'app/src/core/resources.js', 64);
-    assert.equal(findBundled(d).length, 0, '把自家源码当成模拟器本体了');
+    assert.equal(findBundled(d).length, 0, '¡Tomó nuestro propio código como un emulador!');
     fs.rmSync(d, { recursive: true, force: true });
   });
 
-  test('守卫会拦第三方底座的适配器源码（防止又长回来）', () => {
+  test('La guardia bloquea el código de adaptadores de bases de terceros (para que no vuelva)', () => {
     const d = tmpDir('guard-adapter');
     touch(d, 'app/src/core/backends/mumu.js', 64);
     touch(d, 'app/src/core/backends/fydeos.js', 64);
     touch(d, 'app/src/core/mumu-compat.js', 64);
     const hits = findForbiddenSource(d);
-    assert.equal(hits.length, 3, `命中数 ${hits.length}（应为 3）`);
+    assert.equal(hits.length, 3, `Coincidencias: ${hits.length} (deberían ser 3)`);
     const r = assertStandalone(d, { label: '测试', exit: false });
-    assert.equal(r.ok, false, '适配器源码没让守卫失败');
+    assert.equal(r.ok, false, 'El código del adaptador no hizo fallar a la guardia');
     fs.rmSync(d, { recursive: true, force: true });
   });
 
-  test('守卫不会把普通的 frame.js / 业务 js 当成第三方底座', () => {
+  test('La guardia no toma un frame.js normal / js de la app como base de terceros', () => {
     const d = tmpDir('guard-other-js');
     touch(d, 'app/src/render/frame.js', 64);
     touch(d, 'app/src/core/backends/builtin.js', 64);
-    assert.equal(findForbiddenSource(d).length, 0, 'core 外的 frame.js / builtin.js 不应被误判');
+    assert.equal(findForbiddenSource(d).length, 0, 'frame.js / builtin.js fuera de core no deben marcarse por error');
     fs.rmSync(d, { recursive: true, force: true });
   });
 
-  test('干净的运行时目录不报错', () => {
+  test('Una carpeta de runtime limpia no da error', () => {
     const d = tmpDir('guard-clean');
     touch(d, 'runtime/emulator/emulator.exe', 64);
     touch(d, 'runtime/platform-tools/adb.exe', 64);
@@ -196,32 +196,32 @@ function touch(dir, rel, bytes = 8) {
     fs.rmSync(d, { recursive: true, force: true });
   });
 
-  test('目录不存在时跳过检查而不是崩掉', () => {
+  test('Si la carpeta no existe se omite la comprobación en vez de fallar', () => {
     const r = assertStandalone(path.join(os.tmpdir(), 'lanzadorapk-not-exist-xyz'), { exit: false });
     assert.equal(r.ok, true);
     assert.equal(r.skipped, true);
   });
 
-  console.log('\n[独立运行 · 构建链路已接入守卫]');
+  console.log('\n[Funcionamiento independiente · la cadena de compilación usa la guardia]');
 
-  test('便携版打包会扫一遍 resources', () => {
+  test('El empaquetado portátil revisa resources', () => {
     const src = read('build', 'pack.js');
-    assert(/assertStandalone\(path\.join\(OUT, 'resources'\)/.test(src), 'pack.js 未接入守卫');
+    assert(/assertStandalone\(path\.join\(OUT, 'resources'\)/.test(src), 'pack.js no usa la guardia');
   });
 
-  test('MSIX 打包会扫一遍载荷 app/', () => {
+  test('El empaquetado MSIX revisa la carga app/', () => {
     const src = read('build', 'msix.js');
-    assert(/assertStandalone\(appDir/.test(src), 'msix.js 未接入守卫');
+    assert(/assertStandalone\(appDir/.test(src), 'msix.js no usa la guardia');
   });
 
-  test('打包只带 build/runtime（Google 运行时），没有别的模拟器目录', () => {
+  test('El paquete solo lleva build/runtime (runtime de Google), sin carpetas de otros emuladores', () => {
     const yml = read('electron-builder.yml');
     const block = yml.slice(yml.indexOf('extraResources:'));
     const head = block.slice(0, block.indexOf('win:'));
-    assert(!/mumu|ldplayer|bluestacks/i.test(head), 'extraResources 里出现了第三方模拟器');
-    assert(/build\/runtime/.test(head), 'extraResources 没有内置运行时');
+    assert(!/mumu|ldplayer|bluestacks/i.test(head), '¡Apareció un emulador de terceros en extraResources!');
+    assert(/build\/runtime/.test(head), 'extraResources no incluye el runtime');
   });
 
-  console.log(`\n结果：${passed} 通过，${failed} 失败\n`);
+  console.log(`\nResultado: ${passed} correctas, ${failed} fallidas\n`);
   process.exit(failed ? 1 : 0);
 })();

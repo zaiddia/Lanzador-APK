@@ -175,7 +175,7 @@ function writeAssets(dir) {
       buf = (a.w === a.h)
         ? drawAppIcon(a.w)
         : composeIcon(a.w, a.h, Math.min(a.h * 0.72, a.w * 0.42));
-      console.warn(`  [回退] ${a.file} 未在 build/store-assets 找到，改用程序化绘制`);
+      console.warn(`  [respaldo] ${a.file} no está en build/store-assets; se dibuja por código`);
     }
     fs.writeFileSync(path.join(dir, a.file), buf);
     made.push(`${a.file} ${a.w}x${a.h}`);
@@ -188,13 +188,13 @@ function writeAssets(dir) {
 function manifest() {
   return `<?xml version="1.0" encoding="utf-8"?>
 <!--
-  LanzadorAPK · Microsoft Store (MSIX) 清单
-  由 build/msix.js 生成，不要手改；改模板请改 build/msix.js。
+  LanzadorAPK · manifiesto de Microsoft Store (MSIX)
+  Generado por build/msix.js; no lo edites a mano: para cambiar la plantilla edita build/msix.js.
 
-  两个必须和 Partner Center 逐字一致的字段：
+  Dos campos que deben coincidir exactamente con Partner Center:
     Identity/@Name          ← Product identity → Package/Identity/Name
     Identity/@Publisher     ← Product identity → Package/Identity/Publisher
-  本地自签测试时，Publisher 必须等于自签证书的 Subject。
+  En pruebas locales autofirmadas, Publisher debe ser igual al Subject del certificado autofirmado.
 -->
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
@@ -225,14 +225,14 @@ function manifest() {
   </Resources>
 
   <Capabilities>
-    <!-- 全信任桌面应用（Desktop Bridge）唯一必需的能力。 -->
+    <!-- La única capacidad obligatoria para una app de escritorio de confianza total (Desktop Bridge). -->
     <rescap:Capability Name="runFullTrust" />
     <!--
-      刻意不声明 unvirtualizedResources / broadFileSystemAccess：
-      前者只给微软及其合作方发行的 PC 游戏，Store 基本不批；后者是给
-      AppContainer 应用突破沙箱用的，full-trust 应用本来就是用户身份。
-      为了避开 AppData 写重定向，我们把数据目录放到了 %USERPROFILE%\\LanzadorAPK，
-      完全不进虚拟化范围（见 src/core/store.js 的 STORE_BUILD）。
+      A propósito no se declaran unvirtualizedResources / broadFileSystemAccess:
+      el primero solo se da a juegos de PC de Microsoft y sus socios, la Store casi nunca lo aprueba; el segundo
+      sirve para que apps AppContainer salgan del sandbox, y una app full-trust ya corre con la identidad del usuario.
+      Para evitar la redirección de escritura en AppData, la carpeta de datos está en %USERPROFILE%\\LanzadorAPK,
+      totalmente fuera de la virtualización (ver STORE_BUILD en src/core/store.js).
     -->
   </Capabilities>
 
@@ -245,10 +245,10 @@ function manifest() {
         Square150x150Logo="Assets\\Square150x150Logo.png"
         Square44x44Logo="Assets\\Square44x44Logo.png">
         <!--
-          小磁贴/大磁贴的 logo 只能挂在 uap:DefaultTile 上，不能写在
-          uap:VisualElements 的属性里 —— 放错位置时 MakeAppx 会直接拒收整个包：
+          Los logos de mosaico pequeño/grande solo pueden ir en uap:DefaultTile, no en
+          los atributos de uap:VisualElements: si van en el lugar equivocado MakeAppx rechaza todo el paquete:
           "?? DTD/??????? 'VisualElements' ??? 'Square71x71Logo'?"
-          （0x80080204 The package manifest is not valid）
+          (0x80080204 The package manifest is not valid)
         -->
         <uap:DefaultTile Wide310x150Logo="Assets\\Wide310x150Logo.png"
           Square71x71Logo="Assets\\Square71x71Logo.png"
@@ -341,18 +341,18 @@ function stagePackage() {
   const pick = resolvePayload();
   const appSrc = pick.dir;
   if (!fs.existsSync(path.join(appSrc, 'LanzadorAPK.exe'))) {
-    console.error(`\n找不到 ${path.join(appSrc, 'LanzadorAPK.exe')}。`);
-    console.error('两条路：');
-    console.error('  A) node build/pack.js          （离线，推荐；本脚本会自动把 build/runtime 塞进去）');
+    console.error(`\nNo se encuentra ${path.join(appSrc, 'LanzadorAPK.exe')}.`);
+    console.error('Dos opciones:');
+    console.error('  A) node build/pack.js          (sin conexión, recomendado; este script mete build/runtime automáticamente)');
     console.error('  B) npx electron-builder --win dir --x64 --config electron-builder.yml');
-    console.error('     —— 这一步会去 CDN 拉工具集，没网时只会解一半，最后 Win-unpacked 是残的。\n');
+    console.error('     — este paso descarga herramientas de un CDN; sin red solo se descomprime a medias y win-unpacked queda incompleto.\n');
     process.exit(1);
   }
   const work = path.join(OUT_DIR, '.stage');
   fs.rmSync(work, { recursive: true, force: true });
   const appDir = path.join(work, 'app');
   fs.mkdirSync(appDir, { recursive: true });
-  console.log(`复制应用载荷（来源 ${appSrc}）…`);
+  console.log(`Copiando la carga de la app (origen ${appSrc})…`);
   fs.cpSync(appSrc, appDir, { recursive: true });
   // Son archivos intermedios de Electron/electron-builder; no deben ir en el paquete
   for (const junk of ['builder-debug.yml', 'builder-effective-config.yaml', '.icon-ico', 'VERSION.txt']) {
@@ -360,35 +360,35 @@ function stagePackage() {
   }
   // La versión portátil no trae runtime: se copia build/runtime (equivale a extraResources de electron-builder)
   if (pick.addRuntime) {
-    console.log(`内置运行时 ${pick.runtime} → app/resources/runtime（约 1 GB，需要一会儿）…`);
+    console.log(`Runtime incluido ${pick.runtime} → app/resources/runtime (alrededor de 1 GB, tarda un poco)…`);
     fs.cpSync(pick.runtime, path.join(appDir, 'resources', 'runtime'), { recursive: true });
   }
   const rtExe = path.join(appDir, 'resources', 'runtime', 'emulator', 'emulator.exe');
   if (!fs.existsSync(rtExe)) {
-    console.error(`\n警告：${rtExe} 不存在 —— 这个包装上之后仍会联网下载运行时。`);
-    console.error('先跑 node build/prepare-runtime.js 生成 build/runtime。\n');
+    console.error(`\nAdvertencia: ${rtExe} no existe: este paquete seguirá descargando el runtime por internet tras instalarse.`);
+    console.error('Ejecuta primero node build/prepare-runtime.js para generar build/runtime.\n');
   } else {
-    console.log('运行时已内置（emulator / platform-tools / system-images）');
+    console.log('Runtime incluido (emulator / platform-tools / system-images)');
   }
   // Revisión inmediata tras armar el contenido: el paquete de la Store debe traer su runtime y no incluir emuladores de terceros
-  assertStandalone(appDir, { label: 'MSIX 载荷 app/' });
-  console.log('生成商店图标…');
+  assertStandalone(appDir, { label: 'carga MSIX app/' });
+  console.log('Generando iconos de la Store…');
   const made = writeAssets(path.join(work, 'Assets'));
   for (const m of made) console.log(`  ${m}`);
   fs.writeFileSync(path.join(work, 'AppxManifest.xml'), manifest(), 'utf8');
-  console.log(`清单：Identity=${IDENTITY} Publisher=${PUBLISHER} Version=${msixVersion(VERSION)}`);
+  console.log(`Manifiesto: Identity=${IDENTITY} Publisher=${PUBLISHER} Version=${msixVersion(VERSION)}`);
   return work;
 }
 
 function main() {
-  console.log(`LanzadorAPK MSIX 打包  版本 ${VERSION} → ${msixVersion(VERSION)}`);
+  console.log(`Empaquetado MSIX de LanzadorAPK  versión ${VERSION} → ${msixVersion(VERSION)}`);
   // Vigilante de identidad: un paquete con Publisher de marcador siempre lo rechaza la Store (0x800B0109 / identidad no coincide).
   // Avisar en la documentación no basta: el valor por defecto llegó a ser un marcador y una recompilación casual sobrescribió el paquete bueno.
   if ((/PON-AQUI/i.test(String(PUBLISHER)) || PUBLISHER === PLACEHOLDER_PUBLISHER) && !process.argv.includes('--allow-placeholder')) {
-    console.error(`\nPublisher 不是 Partner Center 确认过的值：${PUBLISHER}`);
-    console.error(`已确认值是 ${CONFIRMED_PUBLISHER}（Identity ${CONFIRMED_IDENTITY}）。`);
-    console.error('占位 Publisher 打出来的包上传时会被商店直接拒收。');
-    console.error('确实要打占位版（仅本地试验，不上架）就加 --allow-placeholder。\n');
+    console.error(`\nEl Publisher no es el valor confirmado por Partner Center: ${PUBLISHER}`);
+    console.error(`El valor confirmado es ${CONFIRMED_PUBLISHER} (Identity ${CONFIRMED_IDENTITY}).`);
+    console.error('Un paquete con Publisher provisional será rechazado por la Store al subirlo.');
+    console.error('Si de verdad quieres una versión provisional (solo pruebas locales, sin publicar) agrega --allow-placeholder.\n');
     process.exit(3);
   }
   fs.mkdirSync(OUT_DIR, { recursive: true });
@@ -396,21 +396,21 @@ function main() {
 
   const makeappx = which('makeappx.exe');
   if (!makeappx) {
-    console.error('\n找不到 makeappx.exe。两条路任选：');
-    console.error('  A. 装 Windows SDK（只勾 Windows SDK 即可，不用装 Visual Studio）：');
+    console.error('\nNo se encuentra makeappx.exe. Elige una de dos opciones:');
+    console.error('  A. Instala el Windows SDK (basta con marcar Windows SDK, no hace falta Visual Studio):');
     console.error('     https://developer.microsoft.com/windows/downloads/windows-sdk/');
-    console.error('  B. 先跑一次 npx electron-builder --win appx，让它把 windows-kits-bundle 下到缓存里，');
-    console.error('     这个脚本会自动从 electron-builder 缓存里找。');
-    console.error(`\nstage 目录已经准备好，手工打包：\n  "${'<makeappx.exe>'}" pack /d "${work}" /p "${path.join(OUT_DIR, artifactName())}" /o\n`);
+    console.error('  B. Ejecuta una vez npx electron-builder --win appx para que descargue windows-kits-bundle a la caché;');
+    console.error('     este script lo busca automáticamente en la caché de electron-builder.');
+    console.error(`\nLa carpeta stage está lista; empaqueta a mano:\n  "${'<makeappx.exe>'}" pack /d "${work}" /p "${path.join(OUT_DIR, artifactName())}" /o\n`);
     process.exit(2);
   }
   const out = path.join(OUT_DIR, artifactName());
-  console.log(`\n用 ${makeappx} 打包…`);
+  console.log(`\nEmpaquetando con ${makeappx} …`);
   fs.rmSync(out, { force: true });
   run(makeappx, ['pack', '/d', work, '/p', out, '/o', '/v']);
 
   const mb = fs.statSync(out).size / 1048576;
-  console.log(`\n完成：${out}  (${mb.toFixed(0)} MB)`);
+  console.log(`\nListo: ${out}  (${mb.toFixed(0)} MB)`);
 
   // Autocomprobación con ZipFile de .NET: el paquete debe tener manifiesto + mapa de bloques + tipos de contenido
   try {
@@ -429,15 +429,15 @@ function main() {
 
   if (DO_SIGN) sign(out);
   else {
-    console.log('\n未签名（Store 会用自己的证书重签，提交时不需要签名）。');
-    console.log('本地想装的话加 --sign 生成自签证书并签名。');
+    console.log('\nSin firmar (la Store vuelve a firmar con su propio certificado; no hace falta firmar para enviarlo).');
+    console.log('Para instalarlo localmente agrega --sign y se genera un certificado autofirmado para firmarlo.');
   }
   // stage es un intermedio de 1,3 GB; conservarlo no sirve y hace pensar que «el paquete está duplicado»,
   // así que se borra tras empaquetar con éxito (para depurar, agrega --keep-stage).
   if (!process.argv.includes('--keep-stage')) {
     try {
       fs.rmSync(work, { recursive: true, force: true });
-      console.log('已清理中间目录 dist/store/.stage');
+      console.log('Carpeta intermedia dist/store/.stage eliminada');
     } catch (_) { /* Si está en uso se deja; no afecta el resultado */ }
   }
   console.log('\nAntes de subirlo a la Store, revisa la sección «Microsoft Store» del README.');
@@ -450,14 +450,14 @@ function artifactName() {
 function sign(file) {
   const signtool = which('signtool.exe');
   if (!signtool) {
-    console.error('\n找不到 signtool.exe，跳过签名。');
+    console.error('\nNo se encuentra signtool.exe; se omite la firma.');
     return;
   }
   const pfx = path.join(OUT_DIR, 'LanzadorAPK-test.pfx');
   const pwd = process.env.LANZADORAPK_MSIX_PFX_PASSWORD || 'LanzadorAPK!test';
   const subject = PUBLISHER;   // Debe coincidir exactamente con el Publisher del manifiesto
   if (!fs.existsSync(pfx)) {
-    console.log(`\n生成自签证书（Subject=${subject}）…`);
+    console.log(`\nGenerando certificado autofirmado (Subject=${subject})…`);
     const ps = [
       '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command',
       `$c = New-SelfSignedCertificate -Type Custom -KeyUsage DigitalSignature`
@@ -468,22 +468,22 @@ function sign(file) {
       + `Export-PfxCertificate -Cert ("Cert:\\CurrentUser\\My\\" + $c.Thumbprint) -FilePath '${pfx}' -Password $p | Out-Null;`
       + `"thumbprint=" + $c.Thumbprint`,
     ];
-    try { run('powershell.exe', ps); } catch (e) { console.error(`生成证书失败：${e.message}`); return; }
+    try { run('powershell.exe', ps); } catch (e) { console.error(`Error al generar el certificado: ${e.message}`); return; }
   }
-  console.log('签名…');
+  console.log('Firmando…');
   try {
     run(signtool, ['sign', '/a', '/v', '/fd', 'SHA256', '/f', pfx, '/p', pwd, file]);
   } catch (e) {
-    console.error(`签名失败：${e.message}`);
-    console.error('\n注意：electron-builder 缓存里的 winCodeSign 工具集是裁剪过的，');
-    console.error('里面的 signtool.exe 签 MSIX 会报「A required function is not present」');
-    console.error('（缺少 MSIX 的 SIP 提供程序注册）。真要本地试装，请用完整 Windows SDK 里的 signtool：');
+    console.error(`Error al firmar: ${e.message}`);
+    console.error('\nOjo: el conjunto winCodeSign de la caché de electron-builder está recortado,');
+    console.error('y su signtool.exe da «A required function is not present» al firmar MSIX');
+    console.error('(falta el registro del proveedor SIP de MSIX). Para probar la instalación local usa el signtool del Windows SDK completo:');
     console.error('  "C:\\Program Files (x86)\\Windows Kits\\10\\bin\\10.0.26100.0\\x64\\signtool.exe" \\');
     console.error(`    sign /fd SHA256 /a /f "${pfx}" /p "${pwd}" "${file}"`);
-    console.error('\n**上架不需要本地签名**：Microsoft Store 会用自己的证书重签你上传的包。');
+    console.error('\n**Para publicar no hace falta firmar localmente**: Microsoft Store vuelve a firmar el paquete que subes con su propio certificado.');
     return;
   }
-  console.log('\n信任证书（管理员 PowerShell 里执行一次，之后才能 Add-AppxPackage）：');
+  console.log('\nConfiar en el certificado (ejecútalo una vez en un PowerShell de administrador; después ya funciona Add-AppxPackage):');
   console.log(`  Import-PfxCertificate -CertStoreLocation 'Cert:\\LocalMachine\\TrustedPeople' -FilePath '${pfx}' -Password (ConvertTo-SecureString '${pwd}' -Force -AsPlainText)`);
   console.log(`  Add-AppxPackage -Path '${file}'`);
 }

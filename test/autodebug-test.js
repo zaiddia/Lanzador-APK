@@ -26,7 +26,7 @@ function test(name, fn) {
 }
 
 function assert(cond, msg) {
-  if (!cond) throw new Error(msg || '断言失败');
+  if (!cond) throw new Error(msg || 'Aserción fallida');
 }
 
 const ROOT = path.join(__dirname, '..');
@@ -34,181 +34,181 @@ const ad = require(path.join(ROOT, 'src/core/autodebug'));
 
 const codes = (issues) => issues.map((i) => i.code);
 
-console.log('\n[自动检测 · 空快照不误报]');
-test('完全空的快照不产生任何问题', () => {
+console.log('\n[Comprobación automática · una instantánea vacía no da falsos avisos]');
+test('Una instantánea totalmente vacía no genera ningún problema', () => {
   const issues = ad.evaluate({});
-  assert(issues.length === 0, `不该有问题，实际 ${JSON.stringify(codes(issues))}`);
+  assert(issues.length === 0, `No debería haber problemas; real: ${JSON.stringify(codes(issues))}`);
 });
 
-test('只知道一半状态时也不会瞎报', () => {
+test('Con solo la mitad del estado tampoco inventa avisos', () => {
   // Solo se sabe que «está en marcha»; nada más
   const issues = ad.evaluate({ runtime: { running: true } });
-  assert(issues.length === 0, `不该有问题，实际 ${JSON.stringify(codes(issues))}`);
+  assert(issues.length === 0, `No debería haber problemas; real: ${JSON.stringify(codes(issues))}`);
 });
 
-test('设备没检查过时不会报「没看到设备」', () => {
+test('Si no se revisó el dispositivo no dice «no se ve el dispositivo»', () => {
   const issues = ad.evaluate({ runtime: { running: true }, device: { checked: false } });
-  assert(!codes(issues).includes('device.missing'), '不该报设备缺失');
+  assert(!codes(issues).includes('device.missing'), 'No debería decir que falta el dispositivo');
 });
 
-console.log('\n[自动检测 · 运行时]');
-test('上次启动失败会报出来，并带上真实报错', () => {
+console.log('\n[Comprobación automática · runtime]');
+test('Si el último arranque falló se reporta, con el error real', () => {
   const issues = ad.evaluate({ runtime: { error: 'FATAL: cannot lock AVD' } });
   const it = issues.find((i) => i.code === 'runtime.bootFailed');
-  assert(it, '应报出启动失败');
-  assert(it.severity === 'error', '应是严重问题');
-  assert(it.detail.includes('cannot lock AVD'), '应带上真实原因');
-  assert(it.fix === 'restartRuntime', '应给出可执行的修复动作');
+  assert(it, 'Debería reportar el fallo de arranque');
+  assert(it.severity === 'error', 'Debería ser un problema grave');
+  assert(it.detail.includes('cannot lock AVD'), 'Debería incluir la causa real');
+  assert(it.fix === 'restartRuntime', 'Debería dar una acción de reparación concreta');
 });
 
-test('引导卡住超过 2 分半才提示（刚开机不算问题）', () => {
+test('Solo avisa si el arranque se atasca más de 2 min y medio (recién arrancado no es problema)', () => {
   const soon = ad.evaluate({ runtime: { running: true, phase: 'booting', bootMs: 30000 } });
-  assert(!codes(soon).includes('runtime.stuckBoot'), '刚开机不该提示');
+  assert(!codes(soon).includes('runtime.stuckBoot'), 'Recién arrancado no debería avisar');
   const stuck = ad.evaluate({ runtime: { running: true, phase: 'booting', bootMs: 200000 } });
-  assert(codes(stuck).includes('runtime.stuckBoot'), '卡久了应提示');
+  assert(codes(stuck).includes('runtime.stuckBoot'), 'Si se atasca mucho debería avisar');
 });
 
-test('残留锁文件与孤儿进程各报一条', () => {
+test('Archivos de bloqueo que quedaron y procesos huérfanos dan un aviso cada uno', () => {
   const issues = ad.evaluate({ runtime: { locks: 2, orphans: 1 } });
-  assert(codes(issues).includes('runtime.staleLocks'), '应报残留锁');
-  assert(codes(issues).includes('runtime.orphanProcesses'), '应报孤儿进程');
+  assert(codes(issues).includes('runtime.staleLocks'), 'Debería reportar bloqueos que quedaron');
+  assert(codes(issues).includes('runtime.orphanProcesses'), 'Debería reportar procesos huérfanos');
 });
 
-test('快照空壳会被识别出来', () => {
+test('Se detectan las instantáneas vacías', () => {
   const issues = ad.evaluate({ runtime: { snapshotStale: true } });
-  assert(codes(issues).includes('runtime.saleSnapshot') === false, '不应有拼错的 code');
-  assert(codes(issues).includes('runtime.staleSnapshot'), '应报快照损坏');
+  assert(codes(issues).includes('runtime.saleSnapshot') === false, 'No debería haber un code mal escrito');
+  assert(codes(issues).includes('runtime.staleSnapshot'), 'Debería reportar la instantánea dañada');
 });
 
-console.log('\n[自动检测 · 设备连接]');
-test('unauthorized 是严重问题（安卓弹了授权框没人点）', () => {
+console.log('\n[Comprobación automática · conexión del dispositivo]');
+test('unauthorized es un problema grave (Android mostró el diálogo de autorización y nadie lo pulsó)', () => {
   const issues = ad.evaluate({ device: { checked: true, state: 'unauthorized' } });
   const it = issues.find((i) => i.code === 'device.unauthorized');
-  assert(it, '应报未授权');
-  assert(it.severity === 'error', '应是严重问题');
-  assert(it.category === 'device', '应归到设备连接');
+  assert(it, 'Debería reportar sin autorizar');
+  assert(it.severity === 'error', 'Debería ser un problema grave');
+  assert(it.category === 'device', 'Debería ir en conexión del dispositivo');
 });
 
-test('offline 与 no-device 区分开，且严重度不同', () => {
+test('offline y no-device se distinguen y tienen gravedad distinta', () => {
   const off = ad.evaluate({ device: { checked: true, state: 'offline' } });
-  assert(codes(off).includes('device.offline'), '应报 offline');
+  assert(codes(off).includes('device.offline'), 'Debería reportar offline');
   const none = ad.evaluate({ runtime: { running: true }, device: { checked: true, state: 'no-device' } });
-  assert(codes(none).includes('device.missing'), '应报设备缺失');
+  assert(codes(none).includes('device.missing'), 'Debería reportar que falta el dispositivo');
 });
 
-console.log('\n[自动检测 · 存储]');
-test('磁盘不足 2GB 是严重问题，8GB 以下是提醒', () => {
+console.log('\n[Comprobación automática · almacenamiento]');
+test('Menos de 2 GB de disco es grave; menos de 8 GB es un aviso', () => {
   const crit = ad.evaluate({ storage: { freeMB: 1024 } });
   const ci = crit.find((i) => i.code === 'storage.diskCritical');
-  assert(ci && ci.severity === 'error', '低于 2GB 应是严重问题');
+  assert(ci && ci.severity === 'error', 'Por debajo de 2 GB debería ser grave');
   const warn = ad.evaluate({ storage: { freeMB: 5000 } });
   const wi = warn.find((i) => i.code === 'storage.diskLow');
-  assert(wi && wi.severity === 'warn', '低于 8GB 应是提醒');
+  assert(wi && wi.severity === 'warn', 'Por debajo de 8 GB debería ser un aviso');
 });
 
-test('数据分区被差量盘挡住会如实报告', () => {
+test('Si un disco diferencial frena la partición de datos se reporta tal cual', () => {
   const issues = ad.evaluate({ storage: { needsReset: true, configuredGB: 16, actualGB: 6 } });
   const it = issues.find((i) => i.code === 'storage.dataNeedsReset');
-  assert(it, '应报扩容未生效');
-  assert(it.detail.includes('16') && it.detail.includes('6'), '应带上配置值与实际值');
+  assert(it, 'Debería reportar que la ampliación no se aplicó');
+  assert(it.detail.includes('16') && it.detail.includes('6'), 'Debería incluir el valor configurado y el real');
 });
 
-test('配置容量大于实际容量是严重问题', () => {
+test('Si el tamaño configurado es mayor que el real es grave', () => {
   const issues = ad.evaluate({ storage: { configuredGB: 24, actualGB: 6 } });
   const it = issues.find((i) => i.code === 'storage.dataMismatch');
-  assert(it && it.severity === 'error', '应是严重问题');
+  assert(it && it.severity === 'error', 'Debería ser un problema grave');
 });
 
-test('共享目录不可写会被报出来', () => {
+test('Se reporta si la carpeta compartida no es escribible', () => {
   const issues = ad.evaluate({ storage: { sharedOk: false, sharedPath: 'D:\\share' } });
   const it = issues.find((i) => i.code === 'storage.sharedBroken');
-  assert(it, '应报共享目录异常');
-  assert(it.detail.includes('share'), '应带上目录路径');
+  assert(it, 'Debería reportar el problema de la carpeta compartida');
+  assert(it.detail.includes('share'), 'Debería incluir la ruta de la carpeta');
 });
 
-console.log('\n[自动检测 · 设置冲突]');
-test('强制竖屏但面板是横屏 —— 方向打架', () => {
+console.log('\n[Comprobación automática · conflictos de configuración]');
+test('Vertical forzada con pantalla horizontal: las orientaciones chocan', () => {
   const issues = ad.evaluate({ settings: { orientationMode: 'portrait', landscape: true } });
-  assert(codes(issues).includes('settings.orientationConflict'), '应报方向冲突');
+  assert(codes(issues).includes('settings.orientationConflict'), 'Debería reportar conflicto de orientación');
 });
 
-test('强制横屏但面板是竖屏 —— 方向打架', () => {
+test('Horizontal forzada con pantalla vertical: las orientaciones chocan', () => {
   const issues = ad.evaluate({ settings: { orientationMode: 'landscape', landscape: false } });
-  assert(codes(issues).includes('settings.orientationConflict'), '应报方向冲突');
+  assert(codes(issues).includes('settings.orientationConflict'), 'Debería reportar conflicto de orientación');
 });
 
-test('跟随应用 + 任意面板方向都不算冲突', () => {
+test('Seguir a la app + cualquier orientación de pantalla no es conflicto', () => {
   const a = ad.evaluate({ settings: { orientationMode: 'auto', landscape: true } });
   const b = ad.evaluate({ settings: { orientationMode: 'auto', landscape: false } });
-  assert(!codes(a).includes('settings.orientationConflict'), 'auto 不该报冲突');
-  assert(!codes(b).includes('settings.orientationConflict'), 'auto 不该报冲突');
+  assert(!codes(a).includes('settings.orientationConflict'), 'auto no debería reportar conflicto');
+  assert(!codes(b).includes('settings.orientationConflict'), 'auto no debería reportar conflicto');
 });
 
-console.log('\n[自动检测 · 网络与日志]');
-test('安卓没网会报出来，并给出修复动作', () => {
+console.log('\n[Comprobación automática · red y registros]');
+test('Si Android no tiene red se reporta, con una acción de reparación', () => {
   const issues = ad.evaluate({ network: { ok: false, reason: 'dns timeout' } });
   const it = issues.find((i) => i.code === 'network.guestDown');
-  assert(it, '应报安卓无网络');
-  assert(it.fix === 'repairNetwork', '应给出修复动作');
+  assert(it, 'Debería reportar que Android no tiene red');
+  assert(it.fix === 'repairNetwork', 'Debería dar una acción de reparación');
 });
 
-test('下载源不通会计数', () => {
+test('Se cuentan las fuentes de descarga que no responden', () => {
   const issues = ad.evaluate({ network: { sources: [{ name: 'GitHub', ok: false }, { name: 'Gitee', ok: true }] } });
   const it = issues.find((i) => i.code === 'network.sourcesDown');
-  assert(it, '应报源不通');
-  assert(it.detail.includes('GitHub'), '应指出哪个源');
-  assert(!it.detail.includes('Gitee'), '正常的源不该列进去');
+  assert(it, 'Debería reportar fuentes que no responden');
+  assert(it.detail.includes('GitHub'), 'Debería indicar qué fuente');
+  assert(!it.detail.includes('Gitee'), 'Las fuentes que funcionan no deben listarse');
 });
 
-test('日志里的错误会被摘出来', () => {
+test('Se extraen los errores del registro', () => {
   const issues = ad.evaluate({ logs: { errors: ['2026-01-01 FATAL: cannot lock AVD'] } });
   const it = issues.find((i) => i.code === 'logs.errors');
-  assert(it, '应报日志错误');
-  assert(it.detail.includes('cannot lock'), '应带上错误原文');
+  assert(it, 'Debería reportar errores del registro');
+  assert(it.detail.includes('cannot lock'), 'Debería incluir el texto original del error');
 });
 
-console.log('\n[自动检测 · 汇总与差异]');
-test('汇总按严重度计数，并给出健康度', () => {
+console.log('\n[Comprobación automática · resumen y diferencias]');
+test('El resumen cuenta por gravedad y da el estado de salud', () => {
   const s = ad.summarize(ad.evaluate({
     runtime: { error: 'boom' },
     storage: { freeMB: 1024 },
     device: { checked: true, state: 'unauthorized' },
   }));
-  assert(s.total === 3, `应有 3 项，实际 ${s.total}`);
-  assert(s.errors === 3, `应有 3 个严重问题，实际 ${s.errors}`);
-  assert(s.health === 'error', '健康度应为 error');
-  assert(s.byCategory.length === 6, '分类数应固定为 6');
+  assert(s.total === 3, `Debería haber 3 elementos; real: ${s.total}`);
+  assert(s.errors === 3, `Debería haber 3 problemas graves; real: ${s.errors}`);
+  assert(s.health === 'error', 'El estado de salud debería ser error');
+  assert(s.byCategory.length === 6, 'El número de categorías debe ser 6');
 });
 
-test('没有问题时健康度是 ok', () => {
+test('Sin problemas el estado de salud es ok', () => {
   const s = ad.summarize([]);
-  assert(s.total === 0 && s.health === 'ok', '应为空且健康');
+  assert(s.total === 0 && s.health === 'ok', 'Debería estar vacío y sano');
 });
 
-test('同 code 的多条只留最后一条', () => {
+test('De varios con el mismo code solo queda el último', () => {
   const list = ad.dedupe([
     { code: 'x', severity: 'warn', title: '旧的' },
     { code: 'x', severity: 'error', title: '新的' },
   ]);
-  assert(list.length === 1, '应只剩一条');
-  assert(list[0].title === '新的', '应保留最后一条');
+  assert(list.length === 1, 'Debería quedar solo uno');
+  assert(list[0].title === '新的', 'Debería conservar el último');
 });
 
-test('差异能分出「新出现」和「已消失」', () => {
+test('La diferencia distingue «nuevos» de «desaparecidos»', () => {
   const prev = [{ code: 'a', severity: 'error' }, { code: 'b', severity: 'warn' }];
   const next = [{ code: 'b', severity: 'warn' }, { code: 'c', severity: 'error' }];
   const d = ad.diff(prev, next);
-  assert(d.added.length === 1 && d.added[0].code === 'c', '应识别出新问题');
-  assert(d.resolved.length === 1 && d.resolved[0].code === 'a', '应识别出已消失');
+  assert(d.added.length === 1 && d.added[0].code === 'c', 'Debería reconocer los problemas nuevos');
+  assert(d.resolved.length === 1 && d.resolved[0].code === 'a', 'Debería reconocer los desaparecidos');
 });
 
-test('严重度变了也算「新出现」（error 升级自 warn 要提醒）', () => {
+test('Un cambio de gravedad también cuenta como «nuevo» (pasar de warn a error debe avisarse)', () => {
   const d = ad.diff([{ code: 'a', severity: 'warn' }], [{ code: 'a', severity: 'error' }]);
-  assert(d.added.length === 1, '严重度升级应重新提醒');
+  assert(d.added.length === 1, 'Al subir la gravedad debe volver a avisar');
 });
 
-console.log('\n[自动检测 · 结构约束]');
-test('每条问题都有分类、严重度、标题', () => {
+console.log('\n[Comprobación automática · restricciones de estructura]');
+test('Cada problema tiene categoría, gravedad y título', () => {
   const issues = ad.evaluate({
     runtime: { error: 'x', locks: 1, orphans: 1, snapshotStale: true },
     device: { checked: true, state: 'offline' },
@@ -217,50 +217,50 @@ test('每条问题都有分类、严重度、标题', () => {
     network: { ok: false },
     logs: { errors: ['err'] },
   });
-  assert(issues.length > 0, '应有若干问题');
+  assert(issues.length > 0, 'Debería haber varios problemas');
   for (const it of issues) {
-    assert(it.code, '必须有 code');
-    assert(ad.CATEGORY_IDS.includes(it.category), `分类必须合法：${it.category}`);
-    assert(['error', 'warn', 'info'].includes(it.severity), `严重度必须合法：${it.severity}`);
-    assert(it.title, '必须有标题');
-    assert(typeof it.hint === 'string', '必须有说明');
+    assert(it.code, 'Debe tener code');
+    assert(ad.CATEGORY_IDS.includes(it.category), `La categoría debe ser válida: ${it.category}`);
+    assert(['error', 'warn', 'info'].includes(it.severity), `La gravedad debe ser válida: ${it.severity}`);
+    assert(it.title, 'Debe tener título');
+    assert(typeof it.hint === 'string', 'Debe tener explicación');
   }
 });
 
-test('分类表在前后端保持一致（渲染层 DEBUG_CATS）', () => {
+test('La tabla de categorías coincide en interfaz y proceso principal (DEBUG_CATS de la capa de renderizado)', () => {
   const appJs = fs.readFileSync(path.join(ROOT, 'src/ui/app.js'), 'utf8');
   const m = appJs.match(/const DEBUG_CATS = \[([\s\S]*?)\];/);
-  assert(m, 'app.js 里应该有 DEBUG_CATS');
+  assert(m, 'app.js debería tener DEBUG_CATS');
   const ids = (m[1].match(/id:\s*'([a-z]+)'/g) || []).map((s) => s.replace(/id:\s*'|'/g, ''));
-  assert(ids.length === ad.CATEGORIES.length, `分类数应一致：前端 ${ids.length} / 后端 ${ad.CATEGORIES.length}`);
+  assert(ids.length === ad.CATEGORIES.length, `El número de categorías debería coincidir: interfaz ${ids.length} / proceso principal ${ad.CATEGORIES.length}`);
   for (const c of ad.CATEGORIES) {
-    assert(ids.includes(c.id), `前端缺少分类 ${c.id}`);
+    assert(ids.includes(c.id), `A la interfaz le falta la categoría ${c.id}`);
   }
 });
 
-console.log('\n[自动检测 · 主进程接线]');
-test('主进程注册了检测相关的 IPC', () => {
+console.log('\n[Comprobación automática · conexión con el proceso principal]');
+test('El proceso principal registró los IPC de comprobación', () => {
   const mainJs = fs.readFileSync(path.join(ROOT, 'src/main.js'), 'utf8');
   for (const ch of ['autodebug:run', 'autodebug:state', 'autodebug:config', 'app:clearOrphans', 'app:clearSnapshot', 'runtime:restart']) {
-    assert(mainJs.includes(`'${ch}'`), `主进程应注册 ${ch}`);
+    assert(mainJs.includes(`'${ch}'`), `El proceso principal debería registrar ${ch}`);
   }
-  assert(mainJs.includes('scheduleAutodebug()'), '主进程应排上定时检测');
+  assert(mainJs.includes('scheduleAutodebug()'), 'El proceso principal debería programar la comprobación periódica');
 });
 
-test('preload 暴露了检测接口，且放行了状态事件', () => {
+test('preload expone la interfaz de comprobación y deja pasar los eventos de estado', () => {
   const p = fs.readFileSync(path.join(ROOT, 'src/preload.js'), 'utf8');
   for (const fn of ['autodebugRun', 'autodebugState', 'autodebugConfig', 'clearOrphans', 'clearSnapshot', 'restartRuntime']) {
-    assert(p.includes(fn), `preload 应暴露 ${fn}`);
+    assert(p.includes(fn), `preload debería exponer ${fn}`);
   }
-  assert(p.includes("'autodebug:state'"), 'preload 应放行 autodebug:state 事件');
+  assert(p.includes("'autodebug:state'"), 'preload debería dejar pasar el evento autodebug:state');
 });
 
-test('设置项里有自动检测的开关与按钮', () => {
+test('La configuración tiene el interruptor y el botón de la comprobación automática', () => {
   const html = fs.readFileSync(path.join(ROOT, 'src/ui/index.html'), 'utf8');
   for (const id of ['setAutodebugAuto', 'setAutodebugInterval', 'setAutodebugNotify', 'btnAutodebugRun', 'autodebugList']) {
-    assert(html.includes(`id="${id}"`), `设置页应有 ${id}`);
+    assert(html.includes(`id="${id}"`), `La configuración debería tener ${id}`);
   }
 });
 
-console.log(`\n结果：${passed} 通过，${failed} 失败`);
+console.log(`\nResultado: ${passed} correctas, ${failed} fallidas`);
 process.exit(failed ? 1 : 0);

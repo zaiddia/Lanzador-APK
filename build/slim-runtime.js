@@ -26,23 +26,23 @@ const path = require('path');
  *   - borrar lib64/vulkan solo vuelve al renderizado por software (probado: arranca y renderiza bien), aunque tampoco pesa mucho → se borra, ahorra 103 MB
  */
 const SAFE = [
-  ['emulator/qemu/windows-x86_64/qemu-system-aarch64.exe', 'arm64 的 QEMU 二进制（只发 x86_64 镜像）'],
+  ['emulator/qemu/windows-x86_64/qemu-system-aarch64.exe', 'binarios QEMU arm64 (solo se distribuyen imágenes x86_64)'],
   // Atención: no se puede borrar la carpeta emulator/lib64/vulkan entera: vulkan-1.dll es el cargador de -gpu host;
   // sin él host falla y solo queda el renderizado por software (probado: en AMD 780M es imprescindible). Solo se borran los archivos grandes:
-  ['emulator/lib64/vulkan/layers', 'Vulkan 校验层（host 渲染用不到，-20MB）'],
-  ['emulator/lib64/vulkan/glslangValidator.exe', '着色器校验工具（运行时用不到，-7MB）'],
-  ['emulator/lib64/vulkan/libvulkan_lvp.dll', 'lavapipe 软件 Vulkan 后备（有系统显卡驱动时用不到，-53MB）'],
-  ['emulator/lib64/vulkan/lvp_icd.json', 'lavapipe 的 ICD 描述（-1KB）'],
-  ['emulator/lib64/vulkan/vk_swiftshader.dll', 'SwiftShader Vulkan（gles_angle 目录里有同款副本，-23MB）'],
-  ['emulator/lib64/qt/translations', '模拟器界面的多语言包（只剩 38px 标题栏）'],
+  ['emulator/lib64/vulkan/layers', 'capas de validación de Vulkan (el renderizado host no las usa, -20MB)'],
+  ['emulator/lib64/vulkan/glslangValidator.exe', 'herramientas de validación de shaders (no se usan en ejecución, -7MB)'],
+  ['emulator/lib64/vulkan/libvulkan_lvp.dll', 'respaldo Vulkan por software lavapipe (no se usa si hay controlador de GPU, -53MB)'],
+  ['emulator/lib64/vulkan/lvp_icd.json', 'descripción ICD de lavapipe (-1KB)'],
+  ['emulator/lib64/vulkan/vk_swiftshader.dll', 'SwiftShader Vulkan (hay una copia igual en la carpeta gles_angle, -23MB)'],
+  ['emulator/lib64/qt/translations', 'paquetes de idioma de la interfaz del emulador (solo queda la barra de título de 38px)'],
   // Atención: no se puede borrar emulator-check.exe: emulator -accel-check lo usa para detectar AEHD/WHPX;
   // sin él se considera «sin aceleración por hardware» y se vuelve a la emulación TCG (probado: el arranque pasa de 42 s a más de 10 minutos).
-  ['emulator/qsn.exe', 'QEMU 快照通知助手（emulator.exe 无任何引用，已 strings 实证，-34MB）'],
-  ['emulator/resources/Toren1BD_Main.png', 'VR 全景环境贴图（红果用不到，-3.7MB）'],
-  ['emulator/resources/Toren1BD_Decor.png', 'VR 全景装饰贴图（-3.5MB）'],
-  ['emulator/resources/Toren1BD.obj', 'VR 全景 3D 模型（-3.5MB）'],
-  ['emulator/resources/macroPreviews', '宏操作预览图（-2.7MB）'],
-  ['emulator/resources/default360.mp4', '360° 全景默认视频（-2.4MB）'],
+  ['emulator/qsn.exe', 'asistente de notificaciones de instantáneas de QEMU (emulator.exe no lo referencia, comprobado con strings, -34MB)'],
+  ['emulator/resources/Toren1BD_Main.png', 'texturas de entorno panorámico VR (no se usan, -3.7MB)'],
+  ['emulator/resources/Toren1BD_Decor.png', 'texturas decorativas panorámicas VR (-3.5MB)'],
+  ['emulator/resources/Toren1BD.obj', 'modelos 3D panorámicos VR (-3.5MB)'],
+  ['emulator/resources/macroPreviews', 'imágenes de vista previa de macros (-2.7MB)'],
+  ['emulator/resources/default360.mp4', 'video panorámico 360° por defecto (-2.4MB)'],
 ];
 
 /** El nivel agresivo está vacío por ahora: WebEngine es dependencia directa y gles_angle lo necesita el renderizado por software; no se pueden borrar */
@@ -60,7 +60,7 @@ function sizeOf(p) {
 
 function slim(root, { aggressive = false, dryRun = false, log = console.log } = {}) {
   if (!fs.existsSync(path.join(root, 'emulator', 'emulator.exe'))) {
-    throw new Error(`${root} 不是一个运行时目录（缺 emulator/emulator.exe）`);
+    throw new Error(`${root} no es una carpeta de runtime (falta emulator/emulator.exe)`);
   }
   const list = aggressive ? SAFE.concat(AGGRESSIVE) : SAFE;
   let freed = 0;
@@ -72,14 +72,14 @@ function slim(root, { aggressive = false, dryRun = false, log = console.log } = 
       try {
         fs.rmSync(p, { recursive: true, force: true });
       } catch (e) {
-        log(`  跳过 ${rel}：${e.message}`);
+        log(`  Se omite ${rel}: ${e.message}`);
         continue;
       }
     }
     freed += n;
-    log(`  删除 ${rel}（${(n / 1048576).toFixed(0)} MB）— ${why}`);
+    log(`  Borrando ${rel} (${(n / 1048576).toFixed(0)} MB) — ${why}`);
   }
-  log(`${dryRun ? '可释放' : '已释放'} ${(freed / 1048576).toFixed(0)} MB`);
+  log(`${dryRun ? 'se pueden liberar' : 'liberados'} ${(freed / 1048576).toFixed(0)} MB`);
   return freed;
 }
 
@@ -89,6 +89,6 @@ if (require.main === module) {
   const root = path.resolve(process.argv[2] || path.join(__dirname, 'runtime'));
   const aggressive = process.argv.includes('--aggressive');
   const dryRun = process.argv.includes('--dry-run');
-  console.log(`瘦身目标：${root}（${aggressive ? '激进' : '安全'}档）`);
+  console.log(`Objetivo de reducción: ${root} (${aggressive ? 'agresivo' : 'seguro'} nivel)`);
   slim(root, { aggressive, dryRun });
 }
