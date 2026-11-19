@@ -39,7 +39,7 @@ En [Releases](https://github.com/zaiddia/Lanzador-APK/releases) se publican:
 **Idioma y región**
 - Toda la interfaz, los mensajes, avisos e informes de diagnóstico están en español (Latinoamérica).
 - Android arranca en **español (es-419)** y con la **zona horaria de tu PC**; el original forzaba chino y la hora de Shanghái.
-- El teclado pinyin (chino) ya no se instala en silencio; es opcional y viene desactivado.
+- Se quitó el teclado pinyin (chino): Android usa su teclado latino, que sigue el idioma configurado. Para que la ñ y las tildes del teclado de tu PC salgan bien, usa el botón **Teclado físico** de la configuración y elige «Español (Latinoamérica)».
 - El instalador NSIS está en español.
 
 **Privacidad y red**
@@ -107,9 +107,9 @@ Para publicar en la Store, pon tu propio valor de *Publisher* de Partner Center 
 | `src/core/brand.js` | Nombre del producto y repositorio de GitHub usados para actualizaciones |
 | `build/` | Empaquetado (portátil, NSIS, MSIX, iconos) |
 | `test/` | Pruebas automáticas |
-| `docs/` | Documentación técnica del proyecto original (en chino) |
+| `docs/` | Documentación técnica (en español; varios documentos describen versiones antiguas del original) |
 
-Los comentarios del código siguen mayoritariamente en chino, como en el original; la documentación técnica original está en `docs/README-original-zh.md` y el resto de `docs/`.
+Los comentarios del código, los mensajes de las pruebas y la documentación de `docs/` están en español. El README original en chino se conserva como referencia en `docs/README-original-zh.md`.
 
 ## Licencia
 

@@ -1,39 +1,39 @@
-# 运行时引擎目录（手动放置，可选）
+# Carpeta del motor del runtime (colocación manual, opcional)
 
-**从 0.2 起，LanzadorAPK 默认完全自持**：adb、QEMU、系统镜像由应用自动下载部署到
-`%APPDATA%\lanzadorapk\runtime\`，不需要手动准备任何东西。
+**Desde 0.2, LanzadorAPK se basta solo por defecto**: la app descarga e instala adb, QEMU y las imágenes del sistema en
+`%APPDATA%\lanzadorapk\runtime\`, sin que haya que preparar nada a mano.
 
-本目录仅用于以下两种情况：
+Esta carpeta solo se usa en estos dos casos:
 
-## 1. 手动放置 QEMU（下载源被墙 / 想用指定版本）
+## 1. Colocar QEMU a mano (fuente de descarga bloqueada / para usar una versión concreta)
 
 ```
 engine/qemu/
 ├─ qemu-system-x86_64.exe
 ├─ qemu-img.exe
-└─ …（其余 QEMU 文件）
+└─ … (el resto de archivos de QEMU)
 ```
 
-QEMU 官方 Windows 构建地址：https://qemu.weilnetz.de/w64/
-（`qemu-w64-setup-*.exe` 是 NSIS 安装包，LanzadorAPK 会用 `/S /D=` 静默安装到运行时目录；
-你也可以用 7-Zip 直接解压安装包后放到上面的位置）
+Compilaciones oficiales de QEMU para Windows: https://qemu.weilnetz.de/w64/
+(`qemu-w64-setup-*.exe` es un instalador NSIS; LanzadorAPK lo instala en silencio en la carpeta del runtime con `/S /D=`;
+también puedes descomprimir el instalador con 7-Zip y ponerlo en la ubicación de arriba)
 
-## 2. 手动放置 adb
+## 2. Colocar adb a mano
 
 ```
 tools/platform-tools/
 └─ adb.exe
 ```
 
-下载地址：https://developer.android.com/tools/releases/platform-tools
+Descarga: https://developer.android.com/tools/releases/platform-tools
 
-## 系统镜像
+## Imágenes del sistema
 
-- 推荐：Android-x86 9.0-r2（x86_64），应用内可直接下载（多镜像、断点续传）
-- 或导入：任意已安装好 Android 的磁盘镜像（qcow2 / raw / vmdk），在「运行时 → 导入」选择
-- 导入后 LanzadorAPK 直接从磁盘引导，无需安装步骤
+- Recomendada: Android-x86 9.0-r2 (x86_64), descargable desde la app (varias imágenes, con reanudación)
+- O importar: cualquier imagen de disco con Android ya instalado (qcow2 / raw / vmdk), desde «Runtime → Importar»
+- Tras importarla, LanzadorAPK arranca directamente desde el disco, sin paso de instalación
 
-## 硬件加速
+## Aceleración por hardware
 
-QEMU 使用 WHPX 加速：控制面板 →「启用或关闭 Windows 功能」→ 勾选「虚拟机平台」→ 重启。
-未启用时 LanzadorAPK 自动回退纯软件模拟（TCG），首次启动较慢。
+QEMU acelera con WHPX: Panel de control → «Activar o desactivar las características de Windows» → marca «Plataforma de máquina virtual» → reinicia.
+Si no está activada, LanzadorAPK pasa solo a emulación por software (TCG) y el primer inicio es más lento.

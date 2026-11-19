@@ -1,18 +1,19 @@
-# 便携 adb
+# adb portátil
 
-把 Android platform-tools 解压到本目录（应出现 `adb.exe`），LanzadorAPK 会优先使用它：
+Descomprime Android platform-tools en esta carpeta (debe quedar `adb.exe`) y LanzadorAPK lo usará primero:
 
 ```
 tools/platform-tools/
 └─ adb.exe
 ```
 
-下载地址：https://developer.android.com/tools/releases/platform-tools
+Descarga: https://developer.android.com/tools/releases/platform-tools
 
-如果本目录为空，LanzadorAPK 会依次尝试：
+Si esta carpeta está vacía, LanzadorAPK prueba en este orden:
 
-1. 设置中手动指定的 adb 路径
-2. 本目录
+1. La ruta de adb indicada a mano en la configuración
+2. Esta carpeta
 3. `%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe`
-4. 常见模拟器自带的 adb（LDPlayer / MuMu / BlueStacks）
-5. 系统 PATH
+4. El PATH del sistema
+
+(El adb de emuladores de terceros ya no se usa: Lanzador APK solo funciona con su propio runtime).

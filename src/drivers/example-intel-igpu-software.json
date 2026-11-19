@@ -1,10 +1,10 @@
 {
   "format": "lanzadorapk-driver/1",
   "id": "example-intel-igpu-software",
-  "name": "Intel 核显 · 软件渲染兜底（示例）",
+  "name": "Gráficos integrados Intel · respaldo con renderizado por software (ejemplo)",
   "version": "1.0.0",
   "author": "LanzadorAPK",
-  "description": "老款 Intel 核显（HD / UHD 6xx 之前）在部分驱动版本上会出现 GLES 初始化失败或花屏。把渲染后端固定为 software，画面一定能出来。",
+  "description": "Los gráficos integrados Intel viejos (anteriores a HD / UHD 6xx) fallan al inicializar GLES o muestran imagen corrupta con algunas versiones de controlador. Fijando el backend de renderizado en software, la imagen sale seguro.",
   "enabled": false,
   "priority": 0,
   "match": {
@@ -18,7 +18,7 @@
       "hw.gpu.enabled": "yes"
     },
     "notes": [
-      "画面能出来但游戏会卡：这类机器更适合玩轻量应用"
+      "La imagen sale, pero los juegos irán lentos: estos equipos sirven más para apps ligeras"
     ]
   }
 }

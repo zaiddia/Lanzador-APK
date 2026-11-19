@@ -1,10 +1,10 @@
 {
   "format": "lanzadorapk-driver/1",
   "id": "example-no-hypervisor-tcg",
-  "name": "没有硬件加速 · 直接走软件模拟（示例）",
+  "name": "Sin aceleración por hardware · directo a emulación por software (ejemplo)",
   "version": "1.0.0",
   "author": "LanzadorAPK",
-  "description": "机器没开「虚拟机监控程序平台」、也不允许装内核驱动时，emulator 走硬件加速会直接失败。这个补丁让 LanzadorAPK 一开始就用软件模拟（-accel off），省掉两轮白等；同时把渲染后端换成 software，避免 GL 初始化失败。",
+  "description": "Si el equipo no tiene activada la «Plataforma del hipervisor de Windows» y tampoco permite instalar controladores de núcleo, emulator falla al usar la aceleración por hardware. Este parche hace que LanzadorAPK use la emulación por software desde el principio (-accel off) y se ahorra dos rondas de espera inútil; además cambia el backend de renderizado a software para evitar fallos al inicializar GL.",
   "enabled": false,
   "priority": 10,
   "match": {
@@ -18,7 +18,7 @@
       "hw.gpu.mode": "software"
     },
     "notes": [
-      "软件模拟比硬件加速慢 5~10 倍，能开虚拟化时建议还是去「Windows 功能」里勾上虚拟机平台"
+      "La emulación por software es 5~10 veces más lenta que la aceleración por hardware; si puedes activar la virtualización, conviene marcar la Plataforma de máquina virtual en «Características de Windows»"
     ]
   }
 }

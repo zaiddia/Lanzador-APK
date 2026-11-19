@@ -1,107 +1,107 @@
-# 安卓底座方案评估（v0.5.0 分支）
+# Evaluación de bases Android (rama v0.5.0)
 
-> 背景：v0.4.3 用的是 Google 原生模拟器 + Qt 窗口，再被嵌进 Electron 窗口。
-> 嵌入这条路有一串先天毛病（黑边、坐标错位、铺不满、Qt 面板方向打架）。
-> 本文记录「换底座」这件事的可行性评估，以及 v0.5.0 实际落地的做法。
+> Contexto: v0.4.3 usaba el emulador nativo de Google + ventana Qt, incrustada luego en una ventana de Electron.
+> La incrustación tiene una serie de problemas de origen (bordes negros, coordenadas desplazadas, no llena la ventana, choques de orientación del panel Qt).
+> Este documento recoge la evaluación de viabilidad de «cambiar de base» y lo que se implementó realmente en v0.5.0.
 
-## 结论速览
+## Resumen de conclusiones
 
-| 方案 | 性能 | 稳定性 | 分发/合规 | 工作量 | 结论 |
+| Opción | Rendimiento | Estabilidad | Distribución/cumplimiento | Trabajo | Conclusión |
 |------|------|--------|-----------|--------|------|
-| **A. 现有模拟器 + 独立窗口模式** | 中 | 高 | 无问题 | 小 | ✅ **v0.5.0 已落地** |
-| **B. Waydroid + WSL2** | 高 | 中 | 无问题 | 大 | ⚠️ 可做，但有硬门槛 |
-| **C. Waydroid + 轻量 Linux VM** | 高 | 中 | 无问题 | 大 | ⚠️ 同 B，且更重 |
-| **D. 应用宝电脑版** | 高 | 高 | ❌ 闭源 | — | ❌ 不可行 |
-| **E. 微软 WSA** | 高 | — | ❌ 已停止支持 | — | ❌ 不可行 |
-| **F. 换成 FydeOS / PhoenixOS / Bliss OS** | 高 | 中 | 无问题 | 巨大 | ❌ 与产品定位冲突 |
+| **A. Emulador actual + modo de ventana independiente** | medio | alta | sin problemas | poco | ✅ **implementado en v0.5.0** |
+| **B. Waydroid + WSL2** | alto | media | sin problemas | mucho | ⚠️ posible, pero con requisitos duros |
+| **C. Waydroid + VM Linux ligera** | alto | media | sin problemas | mucho | ⚠️ igual que B, y más pesado |
+| **D. Tencent App Store para PC** | alto | alta | ❌ código cerrado | — | ❌ no viable |
+| **E. Microsoft WSA** | alto | — | ❌ sin soporte | — | ❌ no viable |
+| **F. Cambiar a FydeOS / PhoenixOS / Bliss OS** | alto | media | sin problemas | enorme | ❌ choca con el enfoque del producto |
 
-## A. 独立窗口模式（已落地）
+## A. Modo de ventana independiente (implementado)
 
-不再把模拟器窗口 `SetParent` 塞进我们自己的窗口，而是让模拟器开它自己的
-原生窗口，我们只负责「打开应用 → 把那个窗口摆到用户面前」。
+En vez de meter la ventana del emulador en la nuestra con `SetParent`, el emulador abre su propia
+ventana nativa y nosotros solo nos encargamos de «abrir la app → poner esa ventana delante del usuario».
 
-**为什么这比继续修嵌入更好**：嵌入模式下的问题（黑边、坐标错位、点击不
-对应、铺不满）根因都在「我们把一个 Qt/OpenGL 窗口当普通子窗口摆布」。每
-修一个都会引出下一个。独立窗口模式下，画面渲染、输入映射、尺寸自适应全
-部由模拟器自己负责——这些本来就是它的强项。
+**Por qué es mejor que seguir arreglando la incrustación**: los problemas del modo incrustado (bordes negros, coordenadas desplazadas, clics que no
+corresponden, no llenar la ventana) vienen todos de «manejar una ventana Qt/OpenGL como una subventana normal». Cada
+arreglo provoca el siguiente. En modo independiente el renderizado, el mapeo de entrada y el ajuste de tamaño
+los hace el propio emulador, que es justo lo que mejor sabe hacer.
 
-**已实现**：
-- `display.windowEmbed` 设置项（`embed` / `detached`），UI 里可选。
-- `appwin.openDetached()`：隐藏空壳窗口 → 解除父子关系 → 显示原生窗口 →
-  按面板比例居中摆放。
-- `agent.ps1` 新增 `layout` / `detach` / `perf` 命令；`_detachedMode` 下
-  清理逻辑只做最小动作，不会把用户正在看的窗口当杂物藏掉。
-- 尺寸必须**按面板比例一次给对**：模拟器原生窗口自己锁宽高比，给错比例会
-  被夹回去（给 1280 宽，实际只有 400）。
+**Implementado**:
+- Opción `display.windowEmbed` (`embed` / `detached`), elegible en la interfaz.
+- `appwin.openDetached()`: oculta la ventana contenedora vacía → quita la relación padre-hijo → muestra la ventana nativa →
+  la centra según la proporción de la pantalla.
+- `agent.ps1` agrega los comandos `layout` / `detach` / `perf`; con `_detachedMode`
+  la lógica de limpieza hace lo mínimo y no oculta como estorbo la ventana que el usuario está viendo.
+- El tamaño debe **darse bien a la primera según la proporción de la pantalla**: la ventana nativa del emulador fija su propia proporción y una equivocada
+  se corrige sola (con 1280 de ancho, en realidad quedan 400).
 
-**实测**（本机 Ryzen 7 8745HS / Win10 26300 / AEHD）：
-红果免费短剧在 `Android Emulator - lanzadorapk:5554` 原生窗口里铺满、
-方向正确、点击对应，无黑边。
+**Prueba real** (Ryzen 7 8745HS / Win10 26300 / AEHD):
+una app de video ocupa toda la ventana nativa `Android Emulator - lanzadorapk:5554`,
+con orientación correcta, clics que corresponden y sin bordes negros.
 
-**代价**：多一个任务栏图标，观感和主窗口不完全统一。
+**Coste**: hay un icono más en la barra de tareas y el aspecto no es del todo igual al de la ventana principal.
 
-## B / C. Waydroid 路线
+## B / C. La ruta Waydroid
 
-Waydroid 是 LXC 容器方案（不是虚拟机），复用宿主 Linux 内核直接跑 Android
-框架，图形直接画到 Wayland 上，所以性能明显好于任何模拟器。
+Waydroid es una solución de contenedor LXC (no una máquina virtual) que reutiliza el núcleo Linux del anfitrión para ejecutar Android directamente
+framework de Android, y los gráficos se dibujan directamente en Wayland, así que rinde bastante mejor que cualquier emulador.
 
-**硬性门槛**（缺一不可）：
+**Requisitos duros** (hacen falta todos):
 
-1. **需要一个跑得起来的 Linux 内核**，且内核必须编译了 binder / ashmem。
-   - 微软官方 WSL2 内核**默认去掉了** binder，必须自己从
-     `microsoft/WSL2-Linux-Kernel` 编译一个带 `CONFIG_ANDROID_BINDER_IPC`
-     等选项的内核替换进去。
-2. **需要 Wayland 会话**。Waydroid 不跑在 X11 上。
-3. **需要 `/dev/dri/renderD*` GPU 渲染节点**，且**不支持 NVIDIA 专有驱动**。
-4. **需要 Hyper-V / WSL2 基础设施**（若走 WSL2 路线）。
+1. **Un núcleo Linux que funcione**, compilado con binder / ashmem.
+   - El núcleo oficial de WSL2 de Microsoft **quita binder por defecto**; hay que compilar uno propio desde
+     `microsoft/WSL2-Linux-Kernel` con `CONFIG_ANDROID_BINDER_IPC`
+     y otras opciones, y sustituirlo.
+2. **Una sesión Wayland**. Waydroid no funciona sobre X11.
+3. **El nodo de renderizado GPU `/dev/dri/renderD*`**, y **no admite el controlador propietario de NVIDIA**.
+4. **La infraestructura de Hyper-V / WSL2** (si se va por WSL2).
 
-**这台机器的实际状况**：
+**Situación real de este equipo**:
 
-| 门槛 | 状态 |
+| Requisito | Estado |
 |------|------|
-| `HypervisorPresent` | `False` — Hyper-V 未启用 |
-| WSL | 只有 `wsl.exe` 存根，**没有任何发行版** |
-| AEHD | 运行中（模拟器靠它加速） |
-| GPU | AMD Radeon 780M（符合，非 NVIDIA） |
-| CPU / RAM | 16 线程 / 31.3 GB（充裕） |
+| `HypervisorPresent` | `False`: Hyper-V no está activado |
+| WSL | Solo el stub `wsl.exe`, **sin ninguna distribución** |
+| AEHD | En ejecución (el emulador lo usa para acelerar) |
+| GPU | AMD Radeon 780M (cumple, no es NVIDIA) |
+| CPU / RAM | 16 hilos / 31,3 GB (de sobra) |
 
-**关键冲突**：LanzadorAPK 现在靠 **AEHD**（Android Emulator Hypervisor Driver）
-加速。AEHD 和 Hyper-V 是**互斥**的——启用 Hyper-V 后 AEHD 就失效。所以
-Waydroid 不能和现有模拟器底座共存于同一台机器的同一时刻，只能二选一。
+**Conflicto clave**: LanzadorAPK acelera hoy con **AEHD** (Android Emulator Hypervisor Driver).
+AEHD y Hyper-V son **incompatibles**: al activar Hyper-V, AEHD deja de funcionar. Por eso
+Waydroid no puede convivir al mismo tiempo con la base de emulador actual en el mismo equipo; hay que elegir uno.
 
-**方案 C（轻量 Linux VM）比 B 更重**：要在 Windows 上额外跑一个完整 Linux
-虚拟机（QEMU/VirtualBox/Hyper-V）再在里面装 Waydroid，等于两层虚拟化 +
-一整套 Linux 发行版的分发打包。启动时间、磁盘占用、首次配置复杂度都会远
-超现在的「双击 APK 就能用」。
+**La opción C (VM Linux ligera) es más pesada que B**: hay que ejecutar en Windows una máquina virtual Linux
+completa (QEMU/VirtualBox/Hyper-V) y dentro instalar Waydroid: dos capas de virtualización +
+empaquetar y distribuir una distribución Linux entera. El tiempo de arranque, el espacio en disco y la complejidad de la primera configuración superarían
+con mucho el actual «doble clic en el APK y listo».
 
-**Waydroid 还缺 ARM 兼容**：x86 环境下只能跑 x86 应用，遇到只有 ARM
-`libhoudini`/`libndk` 的应用需要额外装转换层，且转换后性能下降。国内短剧/
-社交类 APK 大量是 arm64-only，这一条对「用户随便丢个 APK 进来」的定位是
-硬伤。
+**A Waydroid además le falta compatibilidad ARM**: en x86 solo ejecuta apps x86; las apps que solo traen ARM
+necesitan instalar aparte una capa de traducción `libhoudini`/`libndk`, y tras la traducción el rendimiento baja. Muchísimos APK de
+video corto/redes sociales son solo arm64, y para un producto pensado para «el usuario suelta cualquier APK» eso es
+un defecto grave.
 
-## D. 应用宝电脑版
+## D. Tencent App Store para PC
 
-闭源商业产品，没有公开 API，不能嵌入、不能随我们分发、不能保证长期可用。
-**不可行。**
+Producto comercial de código cerrado, sin API pública: no se puede incrustar, ni distribuir con lo nuestro, ni garantizar que siga disponible.
+**No viable.**
 
-## E. 微软 WSA
+## E. Microsoft WSA
 
-微软已于 2025 年 3 月终止支持，官方分发渠道已关闭；且依赖 Hyper-V，会和
-AEHD 冲突。第三方重打包版本存在合规风险。**不可行。**
+Microsoft terminó el soporte en marzo de 2025 y cerró el canal oficial de distribución; además depende de Hyper-V, que choca con
+AEHD. Las versiones reempaquetadas por terceros tienen riesgos de cumplimiento. **No viable.**
 
-## F. 换操作系统（FydeOS / PhoenixOS / Bliss OS）
+## F. Cambiar de sistema operativo (FydeOS / PhoenixOS / Bliss OS)
 
-这些是**完整操作系统**，不是「Windows 上跑安卓应用」的组件。采用它们等于
-让用户重装系统——和「Windows 上双击 APK 就能用」的定位根本冲突。另外
-PhoenixOS 基本已停止维护。**不作为产品方向。**
+Son **sistemas operativos completos**, no componentes para «ejecutar apps Android en Windows». Adoptarlos equivale a
+pedir al usuario que reinstale el sistema, lo que choca de raíz con «doble clic en el APK en Windows y listo». Además
+PhoenixOS prácticamente ya no se mantiene. **No es una dirección para el producto.**
 
-## 后续建议
+## Recomendaciones
 
-1. **短期**：独立窗口模式（A）已经把最主要的体验问题解决了，先把它打磨好、
-   观察用户反馈。这是收益/成本比最高的一步。
-2. **中期**：`src/core/backends/` 的可插拔底座抽象层已经就位（`Backend` +
-   `CAPS` 能力位），如果将来要接 Waydroid，只需要新增一个 backend 实现，
-   不用动主流程。
-3. **Waydroid 若要真做**，唯一务实的形态是：**独立的安装包 / 独立分支**，
-   明确告知用户「此版本需要启用 Hyper-V，与模拟器版本不能共存」，而不是
-   想着和现有底座无缝切换。
+1. **Corto plazo**: el modo de ventana independiente (A) ya resolvió el principal problema de experiencia; primero pulirlo
+   y observar la respuesta de los usuarios. Es el paso con mejor relación beneficio/coste.
+2. **Medio plazo**: la capa de abstracción de bases intercambiables de `src/core/backends/` ya está lista (`Backend` +
+   bits de capacidad `CAPS`); si algún día se integra Waydroid, basta con agregar una implementación de backend
+   sin tocar el flujo principal.
+3. **Si de verdad se hace Waydroid**, la única forma práctica es: **un instalador aparte / una rama aparte**,
+   avisando claramente al usuario de que «esta versión necesita Hyper-V y no puede convivir con la versión de emulador», en vez de
+   pretender cambiar sin cortes con la base actual.

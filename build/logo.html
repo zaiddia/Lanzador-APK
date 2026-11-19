@@ -179,7 +179,7 @@
     var q = new URLSearchParams(location.search);
     var layout = q.get('layout') || 'square';
     document.body.classList.add('layout-' + layout);
-    // 横版 / 启动图复用主标 DOM，保证三处几何完全一致
+    // La versión horizontal / la pantalla de inicio reutilizan el DOM del logo principal, para que la geometría sea idéntica en los tres
     var src = document.getElementById('brand-tile');
     if (src) {
       document.querySelectorAll('.scaled-tile').forEach(function (host) {

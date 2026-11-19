@@ -1,146 +1,146 @@
-# 开发环境与命令速查
+# Entorno de desarrollo y referencia rápida de comandos
 
-> 这份文档记录「在这台开发机上继续开发 LanzadorAPK」需要知道的环境事实。
-> 大部分坑是沙箱环境特有的，换机器请以实际探测为准。
-> 最后核对：2026-11-14（v0.3.5，已在 v0.3.4 基础上发布本地修复）。
+> Este documento recoge los datos del entorno que hay que conocer para «seguir desarrollando LanzadorAPK en esta máquina de desarrollo».
+> La mayoría de las trampas son propias del entorno aislado; en otra máquina guíate por lo que detectes de verdad.
+> Última revisión: 2026-11-14 (v0.3.5, con correcciones locales publicadas sobre v0.3.4).
 
-## 0. 事故记录：工作区曾被整体丢进回收站
+## 0. Registro de incidente: el área de trabajo se envió entera a la papelera
 
-2026-11-14 20:55 左右，`D:\lanzadorapk-dsh` **整个目录**（261 项：源码 / 测试 / 文档 /
-`.workbuddy` 记忆）被某次「清理 lanzadorapk 旧产物」的操作移进了回收站；
-同一批被清理的还有 `D:\lanzadorapk-dist`、`D:\dist-gitee`、`D:\LanzadorAPK-0.3.3-preview`、
-`D:\tmp-wx` 等旧目录 —— 看起来是删 `D:\lanzadorapk*` 的通配清理顺手带走了工作区。
+Hacia las 20:55 del 2026-11-14, **toda la carpeta** `D:\lanzadorapk-dsh` (261 elementos: código / pruebas / documentación /
+memoria de `.workbuddy`) se movió a la papelera durante una operación de «limpiar artefactos viejos de lanzadorapk»;
+en la misma limpieza cayeron también `D:\lanzadorapk-dist`, `D:\dist-gitee`, `D:\LanzadorAPK-0.3.3-preview`,
+`D:\tmp-wx` y otras carpetas viejas: parece que una limpieza con comodín `D:\lanzadorapk*` se llevó de paso el área de trabajo.
 
-恢复过程（可复用）：
-1. **别清空回收站**。D 盘的条目在 `D:\$Recycle.Bin\<SID>\`，每个条目是一对
-   `$I<id><ext>`（元数据）+ `$R<id><ext>`（数据）。
-2. `$I` 的布局：version u64 @0、原大小 u64 @8、删除时间 u64 @16、
-   **路径长度 u32 @24（单位是 UTF-16 字符数，不是字节！）**、路径 UTF-16LE @28。
-   把 `$R` 改名回 `$I` 里记录的原路径即可恢复（目录会自动重建）。
-3. `.git` 不在回收站里（可能被删除工具跳过）：从 `C:\Users\15656\WorkBuddy\
-   2026-10-29-20-43-38\lanzadorapk\.git` 恢复历史（e1db34b = v0.3.4），再把工作区
-   重新提交。
-4. 恢复后校验：`src/**` 与 `dist\LanzadorAPK-win64-portable\resources\app\src`
-   逐文件 SHA256 完全一致；`npm test` 112 项全绿。
+Proceso de recuperación (reutilizable):
+1. **No vacíes la papelera**. Los elementos del disco D están en `D:\$Recycle.Bin\<SID>\`; cada uno es un par
+   `$I<id><ext>` (metadatos) + `$R<id><ext>` (datos).
+2. Estructura de `$I`: version u64 @0, tamaño original u64 @8, hora de borrado u64 @16,
+   **longitud de la ruta u32 @24 (en caracteres UTF-16, ¡no en bytes!)**, ruta UTF-16LE @28.
+   Basta con renombrar `$R` a la ruta original que guarda `$I` para recuperarlo (las carpetas se recrean solas).
+3. `.git` no estaba en la papelera (quizá la herramienta de borrado lo omitió): se recuperó el historial desde `C:\Users\15656\WorkBuddy\
+   2026-10-29-20-43-38\lanzadorapk\.git` (e1db34b = v0.3.4) y luego se volvió a confirmar
+   el área de trabajo.
+4. Verificación tras recuperar: `src/**` y `dist\LanzadorAPK-win64-portable\resources\app\src`
+   coinciden archivo por archivo en SHA256; `npm test` pasa los 112 casos.
 
-**建议**：以后定期把源码+`.git`+docs+test 打一个 zip 放到 `D:\` 以外
-（例如 `C:\Users\15656\WorkBuddy\` 下），不要和工作区放同一个盘。
+**Recomendación**: de ahora en adelante, guardar cada cierto tiempo un zip de código+`.git`+docs+test fuera de `D:\`
+(por ejemplo en `C:\Users\15656\WorkBuddy\`), no en el mismo disco que el área de trabajo.
 
-## 1. 工具链位置（PATH 里没有，必须用绝对路径）
+## 1. Ubicación de las herramientas (no están en el PATH; hay que usar rutas absolutas)
 
-| 工具 | 路径 | 版本 |
+| Herramienta | Ruta | Versión |
 |---|---|---|
 | Node | `C:\Users\15656\.workbuddy\binaries\node\versions\22.22.2-6\node.exe` | v22.22.2 |
-| npm | `…\22.22.2-6\npm.cmd` | 随 Node |
+| npm | `…\22.22.2-6\npm.cmd` | la de Node |
 | Git | `C:\Users\15656\.workbuddy\binaries\PortableGit\versions\1.3.0\cmd\git.exe` | 2.55.0.windows.3 |
-| Electron | 仓库内 `node_modules\electron\dist\electron.exe` | 33.4.11 |
+| Electron | en el repositorio `node_modules\electron\dist\electron.exe` | 33.4.11 |
 
-PowerShell 里先补 PATH：
+En PowerShell primero agrega al PATH:
 
 ```powershell
 $env:PATH = 'C:\Users\15656\.workbuddy\binaries\PortableGit\versions\1.3.0\cmd;' +
             'C:\Users\15656\.workbuddy\binaries\node\versions\22.22.2-6;' + $env:PATH
 ```
 
-依赖被清掉时重装（19 秒左右，走镜像）：
+Si se borran las dependencias, reinstálalas (unos 19 s, por espejo):
 
 ```powershell
 $env:ELECTRON_MIRROR='https://npmmirror.com/mirrors/electron/'
 npm ci --no-audit --no-fund
 ```
 
-## 2. 每个 shell 必须先清的两个环境变量
+## 2. Dos variables de entorno que hay que borrar en cada shell
 
-宿主 shell 会继承这两个，不清理会出现「Electron 按纯 Node 跑」等灵异现象：
+La shell del anfitrión hereda estas dos; si no se borran pasan cosas raras como «Electron se ejecuta como Node puro»:
 
 ```powershell
-Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue   # 否则 electron.exe 变成 node，--launch 报 bad option
-Remove-Item Env:NODE_OPTIONS -ErrorAction SilentlyContinue           # 否则 build/pack.js 的批量删除会被 safe-delete 拦成 SAFE_DELETE_BULK_GUARD_ERROR
+Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue   # si no, electron.exe actúa como node y --launch da bad option
+Remove-Item Env:NODE_OPTIONS -ErrorAction SilentlyContinue           # si no, el borrado masivo de build/pack.js lo bloquea safe-delete con SAFE_DELETE_BULK_GUARD_ERROR
 ```
 
-## 3. 常用命令
+## 3. Comandos habituales
 
 ```powershell
 cd D:\lanzadorapk-dsh\lanzadorapk
 
-# 单元/回归测试（纯 Node，不需要 Electron/adb/网络）
+# Pruebas unitarias/de regresión (Node puro, sin Electron/adb/red)
 npm test
 
-# Electron 集成测试（ICO / .lnk / WebP 图标降级）
+# Pruebas de integración de Electron (ICO / .lnk / respaldo de iconos WebP)
 .\node_modules\electron\dist\electron.exe test\electron-integration.js
 
-# 界面冒烟截图（--settings 额外拍设置页；--perf/--download 拍对应区块）
+# Capturas rápidas de la interfaz (--settings captura además la configuración; --perf/--download capturan esas secciones)
 .\node_modules\electron\dist\electron.exe . --smoke "$env:TEMP\smoke.png"
 .\node_modules\electron\dist\electron.exe . --smoke "$env:TEMP\smoke.png" --settings
 
-# 真实开机（冷启/热启计时，--stop 会优雅关机并存快照）
+# Arranque real (mide arranque en frío/caliente; --stop apaga ordenadamente y guarda la instantánea)
 node tools\e2e-boot.js . --stop
 
-# 便携版打包（产出 dist\LanzadorAPK-win64-portable）
+# Empaquetar la versión portátil (genera dist\LanzadorAPK-win64-portable)
 node build\pack.js
 
-# 完整版安装包（需要 build/runtime，约 1.4GB 运行时；CI 里跑）
+# Instalador de la versión completa (necesita build/runtime, unos 1,4 GB de runtime; se ejecuta en CI)
 npm run build:exe
 ```
 
-> 冒烟/开机跑完记得确认没有残留进程：
+> Tras las pruebas rápidas/de arranque confirma que no queden procesos:
 > `Get-Process -Name LanzadorAPK,electron,emulator,qemu-system-x86_64 -ErrorAction SilentlyContinue`
-> 模拟器是 detached 的，Electron 退出后 qemu 可能还活着（这是设计：下次秒接管）。
+> El emulador es independiente; tras salir de Electron qemu puede seguir vivo (es a propósito: la próxima vez se toma al instante).
 >
-> 若 `dist\LanzadorAPK-win64-portable` 正被占用（资源管理器/杀软/上一个实例还开着），
-> `pack.js` 会退到 `dist\LanzadorAPK-v<版本>-win64-portable`，属预期；关掉占用者后改名回来即可。
-> 只读/索引进程（Defender、SearchIndexer）可能让空目录几分钟删不掉，等一会儿再试。
+> Si `dist\LanzadorAPK-win64-portable` está en uso (Explorador/antivirus/la instancia anterior sigue abierta),
+> `pack.js` pasa a `dist\LanzadorAPK-v<versión>-win64-portable`, es lo esperado; cierra lo que lo usa y renómbralo.
+> Los procesos de lectura/indexado (Defender, SearchIndexer) pueden impedir borrar una carpeta vacía durante minutos; espera un poco y vuelve a intentar.
 
-## 4. 数据与运行时路径（本机）
+## 4. Rutas de datos y del runtime (en este equipo)
 
-| 用途 | 路径 |
+| Uso | Ruta |
 |---|---|
-| 设置 / 应用清单 / 日志 / APK 备份 | `%APPDATA%\lanzadorapk`（实际目录名 `LanzadorAPK`，大小写不敏感） |
-| 运行时（emulator + adb + 镜像） | `D:\LanzadorAPKRuntime`（`settings.runtime.dir`） |
-| AVD / 已装应用 / 快照 | `D:\LanzadorAPKData`（`settings.runtime.avdDir`） |
-| 共享目录 | `%USERPROFILE%\LanzadorAPKShared` |
-| 诊断报告 | `%APPDATA%\lanzadorapk\logs\diagnostic-*.txt` |
-| 上次启动失败记录 | `%APPDATA%\lanzadorapk\logs\last-failure.json` |
+| Configuración / lista de apps / registros / copias de APK | `%APPDATA%\lanzadorapk` (nombre real de la carpeta `LanzadorAPK`, sin distinguir mayúsculas) |
+| Runtime (emulator + adb + imágenes) | `D:\LanzadorAPKRuntime` (`settings.runtime.dir`) |
+| AVD / apps instaladas / instantáneas | `D:\LanzadorAPKData` (`settings.runtime.avdDir`) |
+| Carpeta compartida | `%USERPROFILE%\LanzadorAPKShared` |
+| Informes de diagnóstico | `%APPDATA%\lanzadorapk\logs\diagnostic-*.txt` |
+| Registro del último fallo de arranque | `%APPDATA%\lanzadorapk\logs\last-failure.json` |
 
-## 5. 文本/文件操作注意事项（这个终端特有）
+## 5. Cuidados con texto/archivos (propios de esta terminal)
 
-- **不要用 `Set-Content` / `Get-Content -Raw` 处理含中文的 UTF-8 文件**：
-  PowerShell 5.1 默认按 ANSI 解码，会写出乱码（本会话踩过一次，直接毁掉测试文件）。
-  读写文本一律走编辑器工具；必须在 PowerShell 里写文件时用
-  `[System.IO.File]::WriteAllText($p, $s, [System.Text.UTF8Encoding]::new($false))`。
-- **`[System.IO.File]` 的静态方法用的是进程初始目录**，`cd` 之后仍然解析旧路径 —— 一律用绝对路径。
-- **删除大目录**：`Remove-Item -Recurse` 可能被 safe-delete 层拦住，
-  用 `[System.IO.Directory]::Delete($path, $true)`；删完空间没释放时清回收站。
-- **长跑进程**（qemu / 大下载）用后台任务；普通命令结束会连带清理子进程树。
-- 读 `reg.exe` 输出时注意它是控制台代码页；包名/路径这类 ASCII 内容没问题。
+- **No uses `Set-Content` / `Get-Content -Raw` con archivos UTF-8 que tengan caracteres no ASCII**:
+  PowerShell 5.1 decodifica como ANSI por defecto y escribe texto corrupto (pasó una vez en una sesión y arruinó un archivo de pruebas).
+  Lee y escribe texto siempre con la herramienta del editor; si hay que escribir un archivo desde PowerShell usa
+  `[System.IO.File]::WriteAllText($p, $s, [System.Text.UTF8Encoding]::new($false))`.
+- **Los métodos estáticos de `[System.IO.File]` usan la carpeta inicial del proceso**: tras `cd` siguen resolviendo la ruta vieja; usa siempre rutas absolutas.
+- **Borrar carpetas grandes**: la capa safe-delete puede bloquear `Remove-Item -Recurse`;
+  usa `[System.IO.Directory]::Delete($path, $true)`; si el espacio no se libera, vacía la papelera.
+- **Procesos largos** (qemu / descargas grandes): usa tareas en segundo plano; un comando normal limpia al terminar todo su árbol de procesos.
+- La salida de `reg.exe` usa la página de códigos de la consola; con contenido ASCII como nombres de paquete/rutas no hay problema.
 
-## 6. 常见故障对照
+## 6. Fallos habituales
 
-| 现象 | 原因 / 处理 |
+| Síntoma | Causa / solución |
 |---|---|
-| `electron --version` 输出 `v20.x`（Node 版本） | `ELECTRON_RUN_AS_NODE=1` 没清 |
-| 打包报 `SAFE_DELETE_BULK_GUARD_ERROR` | `NODE_OPTIONS` 没清 |
-| `npm test` 里 axml/apk 用例显示「跳过」 | 没有真实夹具；合成 APK 用例仍会跑（`test/lib/make-apk.js`） |
-| 模拟器 `0xC0000005`（3221225477） | 渲染后端崩溃；新版本会自动换后端并写 `last-failure.json`，报告在 `logs\diagnostic-*.txt` |
-| 「Running multiple emulators with the same AVD」 | 残留 qemu 占锁；`node tools\emu-clean.ps1` 或重新开机（新版会自动清孤儿） |
-| 更新检查里 Gitee 403 | 匿名 API 限流，客户端熔断 15 分钟并只用 GitHub；不是故障 |
-| 沙箱里 `reg.exe` / `sc.exe` 被拦 | 只影响自动化测试；产品运行在用户桌面不受影响 |
-| 便携版启动 1 秒就退出、无窗口 | 单实例锁被别的 LanzadorAPK 进程占着（可能是没退干净的旧实例），先 `Stop-Process -Name LanzadorAPK` |
+| `electron --version` muestra `v20.x` (la versión de Node) | No se borró `ELECTRON_RUN_AS_NODE=1` |
+| El empaquetado da `SAFE_DELETE_BULK_GUARD_ERROR` | No se borró `NODE_OPTIONS` |
+| En `npm test` los casos de axml/apk dicen «omitida» | No hay APK real de prueba; los casos con APK sintético se siguen ejecutando (`test/lib/make-apk.js`) |
+| Emulador `0xC0000005` (3221225477) | Caída del backend de renderizado; las versiones nuevas cambian de backend solas y escriben `last-failure.json`; el informe está en `logs\diagnostic-*.txt` |
+| «Running multiple emulators with the same AVD» | Un qemu que quedó tiene el bloqueo; `node tools\emu-clean.ps1` o reiniciar (las versiones nuevas limpian huérfanos solas) |
+| Gitee 403 en la comprobación de actualizaciones | Límite de la API anónima; el cliente corta 15 min y usa solo GitHub; no es un fallo |
+| En el entorno aislado se bloquean `reg.exe` / `sc.exe` | Solo afecta a las pruebas automáticas; el producto en el escritorio del usuario no se ve afectado |
+| La versión portátil sale al segundo de iniciar, sin ventana | Otro proceso de LanzadorAPK tiene el bloqueo de instancia única (quizá una instancia vieja que no salió del todo); primero `Stop-Process -Name LanzadorAPK` |
 
-## 7. 发版流程（确认实测通过后再做）
+## 7. Proceso de publicación (solo tras confirmar con pruebas reales)
 
 ```powershell
-# 1. bump 版本
+# 1. subir la versión
 #    package.json: version -> 0.3.5
-# 2. 发行说明：docs/RELEASE-NOTES-NEXT.md -> .github/release-notes-v0.3.5.md
-# 3. 提交 + 打 tag
+# 2. notas de la versión: docs/RELEASE-NOTES-NEXT.md -> .github/release-notes-v0.3.5.md
+# 3. commit + tag
 git add -A; git commit -m "chore(release): v0.3.5"
 git tag -a v0.3.5 -m "LanzadorAPK v0.3.5"
-# 4. 推两个仓库（GitHub 走 SSH，Gitee 走 https；按需）
+# 4. subir a los dos repositorios (GitHub por SSH, Gitee por https; según haga falta)
 git push origin main; git push origin v0.3.5
 git push gitee main;  git push gitee v0.3.5
 ```
 
-CI：`release.yml` 会构建便携版（95MB zip）、完整版 Setup（~1.35GB）与运行时整包
-（~1.36GB），同步便携版到 Gitee（需要 `GITEE_TOKEN` secret，缺了会直接失败而不是静默跳过）。
-`full` job 的 xz 压缩约 40 分钟，属正常。
+CI: `release.yml` compila la versión portátil (zip de 95 MB), el Setup de la versión completa (~1,35 GB) y el paquete completo del runtime
+(~1,36 GB), y sincroniza la portátil con Gitee (necesita el secret `GITEE_TOKEN`; si falta falla en vez de omitirse en silencio).
+La compresión xz del job `full` tarda unos 40 minutos; es normal.
