@@ -20,6 +20,7 @@ const IS_WIN = process.platform === 'win32';
 
 const BRAND = require('./brand');
 const { parseDigest, parseSums, verifyFile, sdkChecksums } = require('./integrity');
+const diskspace = require('./diskspace');
 
 const SOURCES = {
   adb: [
@@ -107,6 +108,24 @@ function run(cmd, args, { timeout = 60000, cwd, windowsHide = true } = {}) {
       resolve({ ok: !err, code: err ? (err.code ?? 1) : 0, stdout: String(stdout || ''), stderr: String(stderr || ''), error: err });
     });
   });
+}
+
+/**
+ * Carpeta de los datos de Android (AVD: partición de datos de 4–24 GB + instantánea de 2–4 GB).
+ * La «Carpeta de datos de Android» que el usuario elige en Configuración debe respetarse siempre.
+ * Antes, si la carpeta del runtime estaba dentro de %APPDATA% (lo normal en la versión ligera), se ignoraba
+ * y el AVD seguía en C: aunque el usuario la hubiera movido a otro disco para ahorrar espacio.
+ * Excepción para no «perder» apps: si ya hay un AVD en la ubicación anterior y la nueva todavía está vacía,
+ * se sigue usando el existente hasta que el usuario mueva la carpeta lanzadorapk.avd (así lo indica la interfaz).
+ */
+function avdHomeFor({ root, insideData, explicitAvd, writable }) {
+  const legacy = insideData ? path.join(root, 'avd') : writable;
+  if (!explicitAvd) return legacy;
+  const hasAvd = (dir) => {
+    try { return fs.existsSync(path.join(dir, 'lanzadorapk.avd', 'config.ini')); } catch (_) { return false; }
+  };
+  if (path.resolve(legacy) !== path.resolve(explicitAvd) && hasAvd(legacy) && !hasAvd(explicitAvd)) return legacy;
+  return explicitAvd;
 }
 
 function fileSize(p) {
@@ -299,7 +318,7 @@ class Provisioner {
       emulatorExe: path.join(root, 'emulator', 'emulator.exe'),
       sysImgRoot: sysRoot,
       sysImgDir: path.join(sysRoot, `android-${sysApi}`, sysTag, sysAbi),
-      avdHome: insideData ? path.join(root, 'avd') : writable,
+      avdHome: avdHomeFor({ root, insideData, explicitAvd, writable }),
       aehdDir: path.join(rootWritable ? root : path.join(store.DATA_DIR, 'runtime'), 'aehd'),
       imagesDir: path.join(rootWritable ? root : path.join(store.DATA_DIR, 'runtime'), 'images'),
       iso: path.join(root, 'images', 'android-x86.iso'),
@@ -338,11 +357,7 @@ class Provisioner {
     const dir = targetDir || this.root;
     const free = doctor.freeDiskMB(dir);
     if (free && free < need + buf) {
-      throw new Error(
-        `Espacio insuficiente en el disco de destino: este componente necesita unos ${need + buf} MB, pero «${dir}» solo tiene ${free} MB.\n`
-        + 'Sugerencia: mueve la «Carpeta de datos del runtime» a un disco con más espacio (Configuración → Integración con el sistema → Carpeta de datos del runtime → Examinar), '
-        + 'o libera espacio / desinstala apps que no uses e inténtalo de nuevo.',
-      );
+      throw diskspace.diskFullError({ dir, needMB: need + buf, freeMB: free, what: 'instalar este componente del runtime' });
     }
     return free;
   }
@@ -625,6 +640,12 @@ class Provisioner {
       .rank(this._downloadUrls(pack.url), { onProgress: (pp) => onProgress({ stage: 'download', message: pp.message, percent: 1 }) })
       .catch(() => this._downloadUrls(pack.url));
 
+    const asDiskFull = (e) => {
+      if (diskspace.isDiskFullError(e) && e.code !== 'DISK_FULL') {
+        throw diskspace.diskFullError({ dir: p.root, needMB: 6024, freeMB: doctor.freeDiskMB(p.root), what: 'descargar e instalar el runtime de Android' });
+      }
+      throw e;
+    };
     onProgress({ stage: 'download', message: `Descargando el runtime (unos 1,5 GB, solo una vez, ${conn} conexiones)…`, percent: 2 });
     // Bloques en paralelo (8 conexiones) es mucho más rápido que un solo flujo: GitHub suele limitar cada conexión, y un solo flujo
     // daba en pruebas solo uno o dos cientos de KB/s; con 8 conexiones se aprovecha todo el ancho de banda. Si se corta, vuelve a un solo flujo con reanudación.
@@ -642,7 +663,7 @@ class Provisioner {
           speed: pr.speed,
         });
       },
-    });
+    }).catch(asDiskFull);
     assertComplete(zip, 200 * 1024 * 1024, 'paquete del runtime');
     if (pack.sha256) {
       onProgress({ stage: 'verify', message: 'Verificando la integridad del runtime (SHA-256)…', percent: 90 });
@@ -656,7 +677,7 @@ class Provisioner {
           onProgress({ stage: 'extract', percent: Math.min(99, 91 + Math.round((done / all) * 8)), message: `Descomprimiendo ${done}/${all}` });
         }
       },
-    });
+    }).catch(asDiskFull);
     try {
       fs.writeFileSync(path.join(p.root, '.runtime-pack.json'), JSON.stringify({
         name: pack.name, tag: pack.tag, at: new Date().toISOString(), from: pack.url,
@@ -895,6 +916,30 @@ class Provisioner {
       } catch (e) { onLog(`Error al copiar componentes de la imagen: ${e.message}`); }
     }
 
+    // Comprobación de espacio ANTES de descomprimir: la imagen del sistema ocupa unos 3,3 GB descomprimida.
+    // Antes no se miraba y, si el disco se llenaba a mitad, el usuario solo veía «Error al descomprimir… ENOSPC»
+    // y luego «faltan componentes del runtime», sin saber que el problema era el espacio.
+    const pending = jobs.filter((j) => {
+      const have = fileSize(j.dest);
+      const srcSize = fileSize(j.src);
+      return !(have > 32 * 1024 * 1024 && (srcSize <= 0 || have >= srcSize));
+    });
+    if (pending.length) {
+      const needBytes = pending.reduce((sum, j) => sum + diskspace.uncompressedSize(j.src).bytes, 0);
+      const needMB = Math.ceil(needBytes / 1048576) + 512; // margen para la partición de datos / registros
+      const freeMB = doctor.freeDiskMB(destRoot);
+      if (freeMB && freeMB < needMB) {
+        onLog(`Espacio insuficiente para descomprimir la imagen: hacen falta ${needMB} MB y quedan ${freeMB} MB en ${destRoot}`);
+        throw diskspace.diskFullError({ dir: destRoot, needMB, freeMB, what: 'descomprimir la imagen del sistema Android' });
+      }
+    }
+    // Paquete del runtime descargado de internet (tiene la marca .runtime-pack.json): tras descomprimir bien,
+    // el .img.xz ya no hace falta (si algún día falta la imagen, autoDeploy vuelve a bajar el paquete).
+    // Borrarlo libera alrededor de 1 GB. En el instalador completo / la Store NO se borra: ese .xz es parte de la instalación
+    // y es la única copia local para recuperar la imagen sin internet.
+    const downloadedPack = fs.existsSync(path.join(this.root, '.runtime-pack.json'));
+    const rootAbs = path.resolve(this.root).toLowerCase() + path.sep;
+
     let done = 0;
     const failures = [];
     for (const j of jobs) {
@@ -948,8 +993,22 @@ class Provisioner {
         });
         fs.renameSync(part, j.dest);
         done += 1;
+        if (downloadedPack && path.resolve(j.src).toLowerCase().startsWith(rootAbs)
+          && path.resolve(j.src) !== path.resolve(j.dest) && fileSize(j.dest) > 32 * 1024 * 1024) {
+          try {
+            const freed = fileSize(j.src);
+            fs.rmSync(j.src, { force: true });
+            onLog(`Se borró la copia comprimida ${path.basename(j.src)} (se liberaron ${(freed / 1048576).toFixed(0)} MB)`);
+          } catch (_) { /* Si no se puede borrar solo ocupa espacio; no afecta el arranque */ }
+        }
       } catch (e) {
         try { fs.rmSync(part, { force: true }); } catch (_) { /* ignore */ }
+        if (diskspace.isDiskFullError(e)) {
+          throw diskspace.diskFullError({
+            dir: destRoot, needMB: Math.ceil(diskspace.uncompressedSize(j.src).bytes / 1048576) + 512,
+            freeMB: doctor.freeDiskMB(destRoot), what: 'descomprimir la imagen del sistema Android',
+          });
+        }
         // Ya no se puede ocultar en silencio: quien llama (instalación con un clic / arranque) debe saber que la imagen no se descomprimió,
         // si no, «bajaría otros 1,4 GB de la fuente oficial» o el arranque fallaría directamente.
         failures.push(`${path.basename(j.dest)}: ${e.message}`);
@@ -1449,4 +1508,4 @@ class Provisioner {
   }
 }
 
-module.exports = { Provisioner, SOURCES, MIN_SIZE, absUrl, baseOf };
+module.exports = { Provisioner, SOURCES, MIN_SIZE, absUrl, baseOf, avdHomeFor };

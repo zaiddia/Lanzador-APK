@@ -662,6 +662,72 @@ async function toggleDisplayMode() {
   return next.display.mode;
 }
 
+/**
+ * Primer inicio con poco espacio: si el disco de los datos (normalmente C:) no alcanza para Android
+ * y hay otro disco con bastante más espacio, se ofrece usarlo ANTES de descargar o descomprimir nada.
+ * Solo se pregunta una vez, solo si el usuario no eligió carpetas y todavía no existe ningún AVD
+ * (así nunca se mueven datos ya creados). Si dice que no, todo sigue igual que antes.
+ */
+async function maybeSuggestRoomierDisk() {
+  try {
+    const s = store.getSettings();
+    const r = s.runtime || {};
+    if (r.diskChoiceAsked || r.installed || String(r.avdDir || '').trim()) return;
+    const diskspace = require('./core/diskspace');
+    const p = runtime.provisioner.paths();
+    if (fs.existsSync(path.join(p.avdHome, 'lanzadorapk.avd'))) return;
+    const ownRuntime = !bundledRuntimeDir && !String(r.dir || '').trim()
+      && !fs.existsSync(path.join(p.root, 'emulator', 'emulator.exe'));
+    // Lo que va a ocupar: datos de Android (partición + instantánea) ~10 GB; con el runtime descargado, +6 GB en el pico de instalación
+    const needMB = (ownRuntime ? 6 * 1024 : 0) + 10 * 1024;
+    const curFree = require('./core/doctor').freeDiskMB(store.DATA_DIR);
+    // Si el disco actual alcanza con holgura no se recorren las demás unidades (evita esperar por unidades de red desconectadas)
+    if (!curFree || curFree >= needMB + 5120) return;
+    const best = diskspace.pickRoomierDrive({ currentDir: store.DATA_DIR, needMB, drives: diskspace.listDrives() });
+    if (!best) return;
+    const curDrive = diskspace.driveOf(store.DATA_DIR) || 'el disco del sistema';
+    const base = path.join(best.root, 'LanzadorAPK');
+    const detail = [
+      `Android necesita unos ${Math.round(needMB / 1024)} GB libres y en ${curDrive} quedan ${(curFree / 1024).toFixed(1)} GB.`,
+      `El disco ${best.drive} tiene ${(best.freeMB / 1024).toFixed(1)} GB libres.`,
+      '',
+      `Si aceptas, se guardarán en ${base}:`,
+      '  • los datos de Android (apps instaladas, almacenamiento e instantánea)',
+      ownRuntime ? '  • el runtime de Android que se descarga la primera vez' : null,
+      '',
+      'Puedes cambiarlo cuando quieras en Configuración → Integración con el sistema.',
+    ].filter((l) => l !== null).join('\n');
+    store.saveSettings({ runtime: { diskChoiceAsked: true } });
+    const { response } = await dialog.showMessageBox({
+      type: 'question',
+      title: 'Lanzador APK',
+      message: `Poco espacio en ${curDrive}. ¿Guardar los datos de Android en ${best.drive}?`,
+      detail,
+      buttons: [`Usar ${best.drive}`, `Seguir en ${curDrive}`],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true,
+    });
+    if (response !== 0) {
+      appLog(`disk suggestion declined (${best.drive})`);
+      return;
+    }
+    const avdDir = path.join(base, 'android-data');
+    fs.mkdirSync(avdDir, { recursive: true });
+    const patch = { runtime: { avdDir } };
+    if (ownRuntime) {
+      const rtDir = path.join(base, 'runtime');
+      fs.mkdirSync(rtDir, { recursive: true });
+      patch.runtime.dir = rtDir;
+    }
+    store.saveSettings(patch);
+    try { runtime.provisioner.invalidateEnvCache?.(); } catch (_) { /* ignore */ }
+    appLog(`disk suggestion accepted: avdDir=${avdDir}${patch.runtime.dir ? ` runtime=${patch.runtime.dir}` : ''}`);
+  } catch (e) {
+    appLog(`disk suggestion failed: ${e.message}`);
+  }
+}
+
 /** En la primera ejecución se instalan adb / emulator / imagen del sistema de una vez, ya no en 5 pasos */
 let deploying = false;
 async function autoDeploy({ force = false } = {}) {
@@ -719,6 +785,11 @@ async function autoDeploy({ force = false } = {}) {
         }
         progress({ message: 'El paquete del runtime está incompleto; se completará desde la fuente oficial…' });
       } catch (e) {
+        // Sin espacio en disco la fuente oficial fallaría igual (y bajaría otro 1,4 GB a medias): se para aquí con el motivo real.
+        if (e && e.code === 'DISK_FULL') {
+          progress({ message: e.message });
+          return { ok: false, error: e.message, code: 'DISK_FULL' };
+        }
         progress({ message: `Runtime de GitHub no disponible (${e.message}); se usará la fuente oficial…` });
       }
     }
@@ -2797,6 +2868,8 @@ if (!gotLock) {
     // Estilo de marca sencillo: el logo aparece gradualmente + barra de progreso + texto de estado.
     // En la primera instalación muestra además una introducción a los pasos de configuración; si no, solo una animación breve.
     // Cuando el entorno Android está listo desaparece y la app abre al instante.
+    // Antes de la animación de arranque (que va siempre encima) y antes de descargar/descomprimir nada
+    await maybeSuggestRoomierDisk();
     const isFirstRun = !store.getSettings().runtime.installed;
     try {
       // Centrada en la pantalla

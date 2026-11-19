@@ -1044,11 +1044,18 @@ class Runtime {
     // En la versión de un solo archivo la imagen va comprimida; primero se descomprime (si ya se hizo pasa al instante).
     // Un error al descomprimir no se puede ocultar: si no, checkEnv() después solo diría «falta la imagen del sistema»
     // y el usuario creería que no se descargó, en vez de que falló la descompresión (disco lleno / archivo dañado).
+    let diskFull = null;
     await this.provisioner.materializeImages(onLog).catch((e) => {
       onLog(`Error al descomprimir la imagen del sistema: ${e.message}`);
       this.log(`materialize failed: ${e.message}`);
+      if (e && e.code === 'DISK_FULL') diskFull = e;
     });
     const env = await this.provisioner.checkEnv();
+    // Sin espacio para la imagen no tiene sentido seguir: se devuelve el motivo real (cuánto falta y qué hacer)
+    // en vez del genérico «faltan componentes del runtime».
+    if (diskFull && !env.sysimg.ok) {
+      return { ok: false, error: diskFull.message, code: 'DISK_FULL', diskFull: true, env };
+    }
 
     // Ruta de emulator: la imagen es el sistema; no hay paso de «instalar en disco»
     if (env.emulator.ok && env.sysimg.ok) {

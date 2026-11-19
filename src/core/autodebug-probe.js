@@ -171,10 +171,16 @@ async function collect(ctx) {
 
   // ---- Almacenamiento ----
   try {
-    const root = paths ? paths.root : null;
-    if (root) {
-      const freeMB = doctor.freeDiskMB(root);
-      obs.storage.freeMB = Number(freeMB) || 0;
+    // Se mira el disco del runtime y el de los datos de Android (que es el que más ocupa) y se reporta el más justo
+    const dirs = paths ? [paths.root, paths.avdHome].filter(Boolean) : [];
+    let worst = null;
+    for (const d of dirs) {
+      const f = Number(doctor.freeDiskMB(d)) || 0;
+      if (f > 0 && (!worst || f < worst.free)) worst = { dir: d, free: f };
+    }
+    if (worst) {
+      obs.storage.freeMB = worst.free;
+      obs.storage.dir = worst.dir;
     }
   } catch (_) { /* ignore */ }
 

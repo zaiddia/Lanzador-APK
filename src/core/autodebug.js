@@ -168,14 +168,18 @@ function evaluate(obs) {
   /* ---------------- Almacenamiento ---------------- */
 
   const freeMB = Number(storage.freeMB) || 0;
+  // «Disco de tu PC» para no confundirlo con el almacenamiento interno de Android (la partición de datos, más abajo)
+  const driveM = /^([a-zA-Z]):/.exec(String(storage.dir || ''));
+  const diskName = driveM ? `el disco ${driveM[1].toUpperCase()}: de tu PC` : 'el disco de tu PC';
+  const diskWhere = storage.dir ? ` en ${storage.dir}` : '';
   if (freeMB > 0 && freeMB < 2048) {
     push({
       code: 'storage.diskCritical',
       category: 'storage',
       severity: 'error',
-      title: 'El disco del runtime está casi lleno',
-      hint: 'Quedan menos de 2 GB; fallarán la instalación de apps y el guardado de instantáneas. Pulsa «Limpiar con un clic» para recuperar imágenes, instantáneas y registros antiguos.',
-      detail: `Quedan ${freeMB} MB`,
+      title: `${diskName.charAt(0).toUpperCase()}${diskName.slice(1)} está casi lleno`,
+      hint: 'Quedan menos de 2 GB; fallarán la instalación de apps y el guardado de instantáneas. Pulsa «Limpiar con un clic» para recuperar imágenes, instantáneas y registros antiguos, o mueve los datos de Android a otro disco en Configuración → Integración con el sistema.',
+      detail: `Quedan ${freeMB} MB${diskWhere}`,
       fix: 'disk',
     });
   } else if (freeMB > 0 && freeMB < 8192) {
@@ -183,9 +187,9 @@ function evaluate(obs) {
       code: 'storage.diskLow',
       category: 'storage',
       severity: 'warn',
-      title: 'Poco espacio en el disco del runtime',
-      hint: 'Quedan menos de 8 GB y las instantáneas y la imagen del sistema necesitan espacio. Te recomendamos limpiar los archivos recuperables.',
-      detail: `Quedan ${freeMB} MB`,
+      title: `Poco espacio en ${diskName}`,
+      hint: 'Quedan menos de 8 GB y las instantáneas y la imagen del sistema necesitan espacio. Te recomendamos limpiar los archivos recuperables o mover los datos de Android a otro disco (Configuración → Integración con el sistema).',
+      detail: `Quedan ${freeMB} MB${diskWhere}`,
       fix: 'disk',
     });
   }
@@ -207,7 +211,7 @@ function evaluate(obs) {
       code: 'storage.dataMismatch',
       category: 'storage',
       severity: 'error',
-      title: 'La partición de datos de Android es más pequeña que lo configurado',
+      title: 'El almacenamiento interno de Android (partición de datos) es más pequeño que lo configurado',
       hint: 'La capacidad real disponible en Android es menor que la configurada; los juegos grandes dirán que falta espacio.',
       detail: `Configurado ${storage.configuredGB} GB · real ${storage.actualGB} GB`,
       fix: 'dataReset',

@@ -124,6 +124,7 @@ const DEFAULT_SETTINGS = {
     sysimgUrl: '',           // Dirección manual del paquete de imagen del sistema
     compatImage: false,      // Modo de compatibilidad ARM: usa la imagen Google Play (con native bridge; instala apps solo ARM)
     deployFailedAt: 0,       // Marca de tiempo del último fallo de instalación automática (0 = sin fallos). Tras un fallo no se vuelve a descargar automáticamente durante 30 minutos
+    diskChoiceAsked: false,  // Ya se ofreció (una vez) guardar los datos de Android en otro disco con más espacio
     // Paquete del runtime de la versión ligera: por defecto se descarga del GitHub Release del proyecto (la misma fuente que «Actualizaciones»),
     // y si no está disponible se pasa a la descarga por componentes de dl.google.com. Aquí se puede poner la dirección de un espejo propio.
     preferGithubRuntime: true,
