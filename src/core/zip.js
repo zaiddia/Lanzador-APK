@@ -1,13 +1,13 @@
 'use strict';
 /**
- * 极简 ZIP 读取器（仅依赖 Node 内置 zlib）
- * 只解析中央目录，按需解压单个条目，避免大 APK 全量解压撑爆内存。
+ * Lector ZIP mínimo (solo depende de zlib integrado en Node)
+ * Solo lee el directorio central y descomprime entradas bajo demanda, para que un APK grande no agote la memoria al descomprimirlo entero.
  *
- * 注意：本文件只做「读」，不做「写」。两处「大小」相关的不变量：
- *  - 单个 Buffer 有上限（Node 约 2GB），所以 GB 级条目一律走 ZipFile + pipeTo；
- *  - ZIP 的传统 EOCD 用 16/32 位存条目数与偏移，超过就进位成 0xffff/0xffffffff，
- *    真正的值在 Zip64 EOCD（0x06064b50）与 Zip64 扩展字段（id=0x0001）里。
- *    两条路径都必须识别，否则大镜像包会被「静默截断条目」或直接越界。
+ * Ojo: este archivo solo «lee», no «escribe». Dos invariantes relacionadas con «tamaños»:
+ *  - un Buffer tiene límite (Node, unos 2 GB), así que las entradas de varios GB siempre usan ZipFile + pipeTo;
+ *  - el EOCD tradicional de ZIP guarda cantidades y desplazamientos en 16/32 bits; si se superan pasan a 0xffff/0xffffffff,
+ *    y los valores reales están en el EOCD Zip64 (0x06064b50) y en el campo extendido Zip64 (id=0x0001).
+ *    Hay que reconocer ambas vías; si no, los paquetes de imagen grandes tendrían «entradas truncadas en silencio» o se saldrían de rango.
  */
 const zlib = require('zlib');
 const fs = require('fs');
@@ -20,16 +20,16 @@ const ZIP64_EOCD_SIG = 0x06064b50;
 const ZIP64_LOC_SIG = 0x07064b50;
 const MAX32 = 0xffffffff;
 const MAX16 = 0xffff;
-// read() 单条目上限：超过就要求调用方走 pipeTo（流式），避免整块进内存
+// Límite de una entrada en read(): si se supera, quien llama debe usar pipeTo (en flujo), para no cargarla entera en memoria
 const MAX_READ = 256 * 1024 * 1024;
 
-/** 把 BigInt 偏移安全地转成 Number（ZIP 不可能大过 2^53 字节） */
+/** Convierte un desplazamiento BigInt en Number de forma segura (un ZIP no puede superar 2^53 bytes) */
 function toNum(v) { return typeof v === 'bigint' ? Number(v) : v; }
 
 /**
- * 解析 Zip64 扩展字段（0x0001），补全中央目录里被置成 0xffffffff 的字段。
- * 字段顺序固定：未压缩大小、压缩大小、本地头偏移、起始磁盘号；只出现「被置位」的那些。
- * @param {Buffer} extra 中央目录项的扩展字段
+ * Interpreta el campo extendido Zip64 (0x0001) y completa los campos del directorio central puestos en 0xffffffff.
+ * El orden de campos es fijo: tamaño sin comprimir, tamaño comprimido, desplazamiento del encabezado local, disco inicial; solo aparecen los «marcados».
+ * @param {Buffer} extra campo extendido de la entrada del directorio central
  * @param {{uncompSize:number, compSize:number, localOffset:number}} fields
  */
 function applyZip64Extra(extra, fields) {
@@ -60,10 +60,10 @@ function applyZip64Extra(extra, fields) {
 }
 
 /**
- * 从 EOCD 位置解出条目数 / 中央目录大小 / 中央目录偏移，自动跟进 Zip64。
- * @param {Buffer} buf 包含 EOCD 的缓冲区
- * @param {number} eocd EOCD 在 buf 内的下标
- * @param {number} base buf[0] 对应的文件绝对偏移（ZipFile 的尾部窗口用）
+ * Obtiene desde la posición del EOCD la cantidad de entradas / tamaño del directorio central / desplazamiento del directorio central, siguiendo Zip64 automáticamente.
+ * @param {Buffer} buf búfer que contiene el EOCD
+ * @param {number} eocd índice del EOCD dentro de buf
+ * @param {number} base desplazamiento absoluto en el archivo de buf[0] (para la ventana final de ZipFile)
  * @returns {{total:number, cdSize:number, cdOffset:number, eocdAbs:number}}
  */
 function readEndOfCentralDirectory(buf, eocd, base) {
@@ -75,7 +75,7 @@ function readEndOfCentralDirectory(buf, eocd, base) {
   const needsZip64 = total === MAX16 || cdSize === MAX32 || cdOffset === MAX32;
   if (!needsZip64) return { total, cdSize, cdOffset, eocdAbs };
 
-  // Zip64 EOCD locator 固定紧挨在 EOCD 前面 20 字节
+  // El localizador del EOCD Zip64 va fijo 20 bytes justo antes del EOCD
   const loc = eocd - 20;
   if (loc < 0) return { total, cdSize, cdOffset, eocdAbs };
   if (buf.readUInt32LE(loc) !== ZIP64_LOC_SIG) return { total, cdSize, cdOffset, eocdAbs };
@@ -159,15 +159,15 @@ class ZipArchive {
     throw new Error(`Método de compresión no admitido ${e.method}: ${name}`);
   }
 
-  /** 列出匹配某个前缀/正则的条目名 */
+  /** Lista los nombres de entradas que coinciden con un prefijo/expresión regular */
   find(re) {
     return [...this.entries.keys()].filter((n) => re.test(n));
   }
 
   /**
-   * 流式解压单个条目到可写流。
-   * system.img 这类 GB 级条目无法整块 inflate 进内存（会撞上 Node 的 2GB 单 Buffer 上限），
-   * 必须边解压边落盘。
+   * Descomprime en flujo una entrada hacia un flujo escribible.
+   * Entradas de varios GB como system.img no se pueden inflar enteras en memoria (chocarían con el límite de 2 GB por Buffer de Node);
+   * hay que escribir a disco mientras se descomprime.
    */
   pipeTo(name, dest) {
     const e = this.entries.get(name);
@@ -193,7 +193,7 @@ class ZipArchive {
       if (e.method !== 8) return done(new Error(`Método de compresión no admitido ${e.method}: ${name}`));
 
       const inflater = zlib.createInflateRaw();
-      // 分片喂入，避免一次性把 GB 数据塞进 zlib 缓冲区
+      // Se alimenta por partes, para no meter GB de datos de una vez en el búfer de zlib
       const SLICE = 1 << 20;
       let pos = 0;
       const pump = () => {
@@ -216,9 +216,9 @@ class ZipArchive {
 }
 
 /**
- * 文件版 ZIP 读取器：只把尾部中央目录读进内存，条目按需从 fd 流式读。
- * 用于 emulator / 系统镜像这类 GB 级安装包——旧版 fs.readFileSync 整包读会
- * 在低内存机器上直接 OOM，表现为「下载完了却装不上」。
+ * Lector ZIP por archivo: solo carga en memoria el directorio central del final; las entradas se leen en flujo desde fd según se necesiten.
+ * Para instaladores de varios GB como emulator / imagen del sistema: el fs.readFileSync del paquete entero de la versión anterior
+ * se quedaba sin memoria en equipos modestos, con el síntoma «terminó de descargar pero no se instala».
  */
 class ZipFile {
   constructor(filePath) {
@@ -240,7 +240,7 @@ class ZipFile {
     if (n > 0) {
       let got = 0;
       while (got < n) {
-        // readSync 可能短读（尤其大块），必须循环到读满
+        // readSync puede leer de menos (sobre todo en bloques grandes); hay que repetir hasta llenar
         const r = fs.readSync(this.fd, b, got, n - got, pos + got);
         if (r <= 0) break;
         got += r;
@@ -268,7 +268,7 @@ class ZipFile {
     let cd = tail;
     let cdBase = tailBase;
     if (cdOffset < tailBase || cdOffset + cdSize > eocdAbs) {
-      // 中央目录不在尾部缓冲里（超大注释 / 多分卷），按声明大小精确读一段
+      // El directorio central no está en el búfer final (comentario enorme / varios volúmenes); se lee exactamente el tramo declarado
       const len = Math.min(cdSize, 256 * 1024 * 1024);
       if (len <= 0) throw new Error('Desplazamiento anómalo del directorio central del ZIP');
       cd = this._readAt(cdOffset, len);
@@ -321,8 +321,8 @@ class ZipFile {
 
   read(name) {
     const { e, start } = this._range(name);
-    // read() 会把整个条目解到内存：给一个明确上限，避免未来某个调用点顺手
-    // 拿来读 GB 级镜像（那正是 issue #21 里「大包必炸」的形态）。
+    // read() descomprime la entrada entera en memoria: se da un límite claro para que ningún llamador futuro
+    // lo use para leer imágenes de varios GB (justo la forma de «los paquetes grandes siempre fallan» de la issue #21).
     if (e.compSize > MAX_READ) {
       throw new Error(`Entrada demasiado grande (${(e.compSize / 1048576).toFixed(0)} MB); usa pipeTo: ${name}`);
     }
@@ -356,20 +356,20 @@ class ZipFile {
 }
 
 /**
- * 把 ZIP 条目名安全解析到 destDir 下，挡住 zip-slip（issue #2 P0-4）。
- * 恶意包里的 "../evil"、绝对路径、盘符、"C:\..."、UNC 都必须在写盘前拒绝。
- * 返回 null 表示该条目不可信，调用方应跳过。
+ * Resuelve con seguridad el nombre de una entrada ZIP dentro de destDir, bloqueando zip-slip (issue #2 P0-4).
+ * En paquetes maliciosos "../evil", rutas absolutas, letras de unidad, "C:\..." y UNC deben rechazarse antes de escribir.
+ * Devuelve null si la entrada no es de confianza; quien llama debe omitirla.
  */
 function resolveZipEntry(destDir, name) {
   if (typeof name !== 'string' || !name) return null;
-  // 统一正斜杠后判断：反斜杠在 Windows 上同样是路径分隔符
+  // Se evalúa tras unificar barras normales: en Windows la barra invertida también separa rutas
   const normalized = name.replace(/\\/g, '/');
   if (normalized.startsWith('/') || /^[A-Za-z]:/.test(normalized) || normalized.includes('\0')) return null;
   const segments = normalized.split('/');
   if (segments.some((s) => s === '..')) return null;
   const root = path.resolve(destDir);
   const target = path.resolve(root, ...segments.filter((s) => s && s !== '.'));
-  // path.resolve 可能因为盘符/挂载点把目标甩到根目录外，最后再核一次前缀边界
+  // path.resolve podría llevar el destino fuera de la raíz por letras de unidad/puntos de montaje; al final se vuelve a comprobar el límite del prefijo
   if (target !== root && !target.startsWith(root + path.sep)) return null;
   return target;
 }

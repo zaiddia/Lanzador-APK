@@ -1,11 +1,11 @@
 'use strict';
 /**
- * 自动检测内核（src/core/autodebug.js）单测
+ * Pruebas unitarias del núcleo de comprobación automática (src/core/autodebug.js)
  *
- * 纯函数，不依赖 electron / adb / 网络 —— CI 可直接跑。
- * 重点守住两条底线：
- *   1) 探测失败不许变成「有问题」（不能瞎报）；
- *   2) 真出问题时必须报出来，而且给出可执行的修复动作。
+ * Funciones puras, sin depender de electron / adb / red: el CI puede ejecutarlas directamente.
+ * Se protegen sobre todo dos límites:
+ *   1) un fallo de detección nunca se convierte en «hay un problema» (no inventar avisos);
+ *   2) si de verdad hay un problema hay que reportarlo, con una acción de reparación concreta.
  */
 
 const fs = require('fs');
@@ -41,7 +41,7 @@ test('完全空的快照不产生任何问题', () => {
 });
 
 test('只知道一半状态时也不会瞎报', () => {
-  // 只知道「在跑」，别的都不知道
+  // Solo se sabe que «está en marcha»; nada más
   const issues = ad.evaluate({ runtime: { running: true } });
   assert(issues.length === 0, `不该有问题，实际 ${JSON.stringify(codes(issues))}`);
 });

@@ -1,18 +1,18 @@
 'use strict';
 /**
- * 游戏按键映射 —— 纯数据层
+ * Asignación de teclas para juegos: capa de datos pura
  *
- * 把键盘按键映射到安卓触屏坐标。每个映射条目：
- *   { key: 'w', action: 'tap', x: 0.15, y: 0.85 }   // 相对坐标 (0~1)
+ * Asigna teclas del teclado a coordenadas de la pantalla táctil de Android. Cada entrada:
+ *   { key: 'w', action: 'tap', x: 0.15, y: 0.85 }   // coordenadas relativas (0~1)
  *   { key: 'space', action: 'tap', x: 0.5, y: 0.9 }
  *   { key: 'j', action: 'swipe', x1: 0.7, y1: 0.5, x2: 0.3, y2: 0.5, duration: 100 }
  *
- * 坐标是相对于 LCD 面板的归一化值 (0~1)，运行时乘以实际 wm size 得到像素。
+ * Las coordenadas son valores normalizados (0~1) respecto a la pantalla LCD; en ejecución se multiplican por el wm size real para obtener píxeles.
  *
- * 预设模板覆盖常见游戏类型：
- *   - fps: WASD 移动摇杆区域 + 鼠标瞄准（鼠标由 Qt 原生处理，这里只管键盘）
- *   - rpg: WASD 移动 + J/K/L 技能 + Space 确认
- *   - generic: 方向键 + Enter/Space
+ * Los perfiles predefinidos cubren los tipos de juego habituales:
+ *   - fps: WASD mueve la zona del joystick + apuntar con el ratón (el ratón lo maneja Qt nativo; aquí solo el teclado)
+ *   - rpg: WASD mover + J/K/L habilidades + Espacio confirmar
+ *   - generic: flechas + Enter/Espacio
  */
 
 const PRESETS = {
@@ -58,21 +58,21 @@ const PRESETS = {
 };
 
 /**
- * 把 Electron 的 key 名标准化为映射表里用的格式。
- * Electron KeyboardEvent.key 值如 'w', 'W', 'ArrowUp', ' ', 'Enter' 等。
+ * Normaliza el nombre de tecla de Electron al formato de la tabla de asignación.
+ * Valores de KeyboardEvent.key de Electron como 'w', 'W', 'ArrowUp', ' ', 'Enter', etc.
  */
 function normalizeKey(key) {
   if (!key) return '';
-  // 单字母统一小写
+  // Las letras sueltas siempre en minúscula
   if (key.length === 1 && /[A-Za-z]/.test(key)) return key.toLowerCase();
   return key;
 }
 
 /**
- * 查找某个按键在当前映射表里的动作。
- * @param {Array} mappings 映射条目数组
+ * Busca la acción de una tecla en la tabla de asignación actual.
+ * @param {Array} mappings arreglo de entradas de asignación
  * @param {string} key Electron KeyboardEvent.key
- * @returns {object|null} 匹配的映射条目
+ * @returns {object|null} entrada coincidente
  */
 function lookup(mappings, key) {
   const nk = normalizeKey(key);
@@ -81,11 +81,11 @@ function lookup(mappings, key) {
 }
 
 /**
- * 把映射条目 + LCD 尺寸转成 adb shell 命令。
- * @param {object} mapping 映射条目
- * @param {number} width LCD 宽度（像素）
- * @param {number} height LCD 高度（像素）
- * @returns {string} adb shell 命令（如 'input tap 192 612'）
+ * Convierte una entrada de asignación + el tamaño del LCD en un comando adb shell.
+ * @param {object} mapping entrada de asignación
+ * @param {number} width ancho del LCD (píxeles)
+ * @param {number} height alto del LCD (píxeles)
+ * @returns {string} comando adb shell (p. ej. 'input tap 192 612')
  */
 function toCommand(mapping, width, height) {
   if (!mapping) return '';

@@ -1,9 +1,9 @@
 'use strict';
 /**
- * 桌面快捷方式 + 多尺寸 ICO 生成
+ * Accesos directos en el escritorio + generación de ICO de varios tamaños
  *
- * ICO 直接用 Electron nativeImage 缩放并手写 ICO 容器（DIB 格式，全 Windows 版本兼容），
- * 不依赖任何第三方图像库，也不需要 ImageMagick。
+ * El ICO se escala con nativeImage de Electron y el contenedor ICO se escribe a mano (formato DIB, compatible con todas las versiones de Windows),
+ * sin librerías de imagen de terceros ni ImageMagick.
  */
 const fs = require('fs');
 const path = require('path');
@@ -20,21 +20,21 @@ function buildDib(bgra, size) {
   header.writeUInt32LE(0, 16);           // BI_RGB
   header.writeUInt32LE(size * size * 4, 20);
 
-  // XOR 位图：自下而上，行内 BGRA
+  // Mapa de bits XOR: de abajo hacia arriba, BGRA por fila
   const xor = Buffer.alloc(size * size * 4);
   for (let y = 0; y < size; y++) {
     const srcRow = (size - 1 - y) * size * 4;
     bgra.copy(xor, y * size * 4, srcRow, srcRow + size * 4);
   }
-  // AND 掩码：1bpp，行按 4 字节对齐，全 0（交给 alpha 通道）
+  // Máscara AND: 1 bpp, filas alineadas a 4 bytes, todo 0 (se deja al canal alfa)
   const maskRow = Math.ceil(size / 32) * 4;
   const mask = Buffer.alloc(maskRow * size, 0);
   return Buffer.concat([header, xor, mask]);
 }
 
 /**
- * @param {Buffer} pngBuffer 任意尺寸的 PNG
- * @returns {Buffer|null} ICO 文件内容
+ * @param {Buffer} pngBuffer PNG de cualquier tamaño
+ * @returns {Buffer|null} contenido del archivo ICO
  */
 function pngToIco(pngBuffer) {
   const { nativeImage } = require('electron');
@@ -45,7 +45,7 @@ function pngToIco(pngBuffer) {
   for (const s of ICO_SIZES) {
     const img = base.getSize().width >= s
       ? base.resize({ width: s, height: s, quality: 'best' })
-      : base.resize({ width: s, height: s, quality: 'best' }); // 小图放大也比缺尺寸好
+      : base.resize({ width: s, height: s, quality: 'best' }); // Ampliar una imagen pequeña es mejor que faltar un tamaño
     const dib = buildDib(img.toBitmap(), s);
     images.push({ size: s, data: dib });
   }
@@ -77,8 +77,8 @@ function safeFileName(name) {
 }
 
 /**
- * PNG-in-ICO：Vista 起 ICO 条目允许直接内嵌 PNG，不用重编码、不丢 alpha。
- * APK 图标常是 WebP/大尺寸 PNG，老的 DIB 路线在这里会整包失败。
+ * PNG dentro de ICO: desde Vista una entrada ICO puede contener un PNG directamente, sin recodificar ni perder alfa.
+ * Los iconos de APK suelen ser WebP/PNG grandes; la ruta DIB antigua fallaría entera aquí.
  */
 function pngBytesToIco(png) {
   if (!Buffer.isBuffer(png) || png.length < 24 || png.toString('ascii', 1, 4) !== 'PNG') return null;
@@ -101,10 +101,10 @@ function pngBytesToIco(png) {
 }
 
 /**
- * 任意 APK 图标 → ICO。三级兜底，保证快捷方式永远带图标：
- *  1) Electron 能直接解（真 PNG/JPEG）→ 多尺寸 DIB ICO；
- *  2) decode 回调（渲染进程用 Chromium 解 WebP）→ PNG-in-ICO；
- *  3) 品牌占位图标 → PNG-in-ICO。
+ * Cualquier icono de APK → ICO. Tres niveles de respaldo para que el acceso directo siempre tenga icono:
+ *  1) Electron lo decodifica directamente (PNG/JPEG reales) → ICO DIB de varios tamaños;
+ *  2) callback decode (el proceso de interfaz decodifica WebP con Chromium) → PNG dentro de ICO;
+ *  3) icono provisional de marca → PNG dentro de ICO.
  */
 async function iconToIco(raw, { decode, onFallback } = {}) {
   const fail = (why) => { try { if (onFallback) onFallback(why); } catch (_) { /* ignore */ } };
@@ -116,7 +116,7 @@ async function iconToIco(raw, { decode, onFallback } = {}) {
       const ico = pngToIco(img.toPNG());
       if (ico) return ico;
     }
-  } catch (_) { /* 非 PNG/JPEG，走下一级 */ }
+  } catch (_) { /* No es PNG/JPEG; se pasa al siguiente nivel */ }
 
   if (typeof decode === 'function') {
     try {
@@ -137,20 +137,20 @@ async function iconToIco(raw, { decode, onFallback } = {}) {
 }
 
 /**
- * 快捷方式的扩展名：Windows 是 .lnk，Linux（FydeOS / ChromeOS 的 Linux 子系统、
- * 各种发行版）是 .desktop（freedesktop 规范）。
+ * Extensión del acceso directo: en Windows .lnk; en Linux (FydeOS / subsistema Linux de ChromeOS,
+ * distintas distribuciones) .desktop (especificación freedesktop).
  */
 function shortcutExt() {
   return process.platform === 'win32' ? '.lnk' : '.desktop';
 }
 
 /**
- * 写一个 freedesktop .desktop 启动项。
+ * Escribe un lanzador freedesktop .desktop.
  *
- * 和 Windows 的 .lnk 差别很大，几个必须注意的点：
- *  - Exec 里的路径带空格要加双引号，且 .desktop 规范里 `%` 是字段码，必须转义成 `%%`；
- *  - 文件必须 chmod +x，否则很多桌面环境会当成文档而不是启动器；
- *  - 图标只能用 PNG/SVG 的绝对路径，ICO 在 Linux 上无效。
+ * Es muy distinto del .lnk de Windows; puntos a tener en cuenta:
+ *  - las rutas con espacios en Exec van entre comillas dobles, y en la especificación .desktop `%` es un código de campo y debe escaparse como `%%`;
+ *  - el archivo debe tener chmod +x; si no, muchos escritorios lo tratan como documento y no como lanzador;
+ *  - el icono solo puede ser una ruta absoluta PNG/SVG; ICO no sirve en Linux.
  *
  * @param {object} opt { shortcutPath, target, args, iconPngPath, description }
  */
@@ -162,7 +162,7 @@ function writeDesktopEntry(opt) {
     throw new Error(`No se puede escribir en la carpeta de accesos directos: ${dir} (${e.message})`);
   }
   const quote = (s) => `"${String(s).replace(/(["\\$`])/g, '\\$1').replace(/%/g, '%%')}"`;
-  // args 是按 shell 习惯拼好的字符串，这里拆成单个参数再各自加引号
+  // args es una cadena armada al estilo shell; aquí se separa en parámetros y cada uno se pone entre comillas
   const argv = String(opt.args || '').match(/"[^"]*"|\S+/g) || [];
   const execLine = [quote(opt.target), ...argv.map((a) => quote(a.replace(/^"|"$/g, '')))].join(' ');
   const icon = opt.iconPngPath && fs.existsSync(opt.iconPngPath) ? opt.iconPngPath : '';
@@ -180,7 +180,7 @@ function writeDesktopEntry(opt) {
     '',
   ].filter((l) => l !== '').join('\n');
   fs.writeFileSync(opt.shortcutPath, body, { encoding: 'utf8', mode: 0o755 });
-  try { fs.chmodSync(opt.shortcutPath, 0o755); } catch (_) { /* 某些文件系统不支持，忽略 */ }
+  try { fs.chmodSync(opt.shortcutPath, 0o755); } catch (_) { /* Algunos sistemas de archivos no lo admiten; se ignora */ }
   if (!fs.existsSync(opt.shortcutPath)) {
     throw new Error(`El acceso directo no se guardó en disco: ${opt.shortcutPath}`);
   }
@@ -188,16 +188,16 @@ function writeDesktopEntry(opt) {
 }
 
 /**
- * 生成桌面快捷方式
+ * Crea el acceso directo en el escritorio
  *
- * writeShortcutLink 返回 true 并不代表文件真的落盘了：安全软件拦截、
- * 桌面目录被重定向到未登录的网盘时都可能「成功但没文件」。所以写完必须
- * 回读一次，保证调用方拿到的路径是真实存在的入口。
+ * Que writeShortcutLink devuelva true no significa que el archivo quedara en disco: un programa de seguridad que lo bloquea o
+ * un escritorio redirigido a una nube sin sesión iniciada pueden dar «éxito sin archivo». Por eso tras escribir
+ * se vuelve a leer, para garantizar que la ruta que recibe quien llama sea un acceso que existe de verdad.
  *
  * @param {object} opt { shortcutPath, target, args, iconIcoPath, description, cwd }
  */
 function writeShortcut(opt) {
-  // Linux / FydeOS：走 .desktop，不用 Windows 的 COM 接口
+  // Linux / FydeOS: usa .desktop, no la interfaz COM de Windows
   if (process.platform !== 'win32') {
     return writeDesktopEntry({
       shortcutPath: opt.shortcutPath,

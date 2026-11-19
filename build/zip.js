@@ -1,19 +1,19 @@
 'use strict';
 /**
- * 便携包压缩（Windows zip）。
+ * Compresión del paquete portátil (zip de Windows).
  *
- * 为什么不用 PowerShell 的 `Compress-Archive`：
- * 它走 .NET 自带 deflate（相当于 zlib 6 档），同一个 225MB 目录压出来是
- * 105,213,775 字节；7-Zip 的 deflate（`-mx=9`）只要 99,616,541 字节 —— 差了 5.6MB。
- * 而 Gitee 发行版附件单文件上限是 100MB（实测 104,800,000 字节能上传成功，
- * 105,213,775 就被拆成 part1/part2 让用户没法直接解压）。差这 5MB，
- * 结果就是「国内用户拿到的包要么解压不了，要么得下两份」。
+ * Por qué no se usa `Compress-Archive` de PowerShell:
+ * usa el deflate de .NET (equivale al nivel 6 de zlib); la misma carpeta de 225 MB queda en
+ * 105.213.775 bytes, mientras que el deflate de 7-Zip (`-mx=9`) da 99.616.541 bytes: 5,6 MB de diferencia.
+ * El límite por archivo de los adjuntos de versión de Gitee era de 100 MB (probado: 104.800.000 bytes se suben,
+ * 105.213.775 se partían en part1/part2 y el usuario no podía descomprimir directamente). Esos 5 MB
+ * significaban que «el paquete no se podía descomprimir, o había que descargar dos partes».
  *
- * 所以这里固定用 7-Zip 压；找不到 7-Zip 才退回 Compress-Archive（并大声提示）。
+ * Por eso siempre se comprime con 7-Zip; solo si no se encuentra 7-Zip se usa Compress-Archive (con un aviso claro).
  *
- * 用法：
- *   node build/zip.js <源目录> <输出.zip> [--limit-mb 100]
- * 退出码：0 成功 / 1 失败 / 2 超过体积上限（CI 里按失败处理，别再悄悄发分片包）
+ * Uso:
+ *   node build/zip.js <carpeta origen> <salida.zip> [--limit-mb 100]
+ * Código de salida: 0 éxito / 1 error / 2 supera el límite de tamaño (en CI cuenta como error, para no publicar partes sin darnos cuenta)
  */
 const fs = require('fs');
 const path = require('path');
@@ -21,7 +21,7 @@ const { spawnSync } = require('child_process');
 
 const MIB = 1024 * 1024;
 
-/** 在常见位置找 7-Zip 的独立可执行文件（7z.exe 或 7za.exe） */
+/** Busca el ejecutable de 7-Zip (7z.exe o 7za.exe) en ubicaciones habituales */
 function find7z() {
   const explicit = process.env.LANZADORAPK_7Z;
   if (explicit && fs.existsSync(explicit)) return explicit;
@@ -33,7 +33,7 @@ function find7z() {
   ];
   for (const p of direct) if (fs.existsSync(p)) return p;
 
-  // PATH 里找（GitHub Actions 的 windows-latest 自带 7-Zip 且在 PATH 上）
+  // Buscar en PATH (windows-latest de GitHub Actions trae 7-Zip en el PATH)
   const pathDirs = (process.env.PATH || '').split(path.delimiter).filter(Boolean);
   for (const dir of pathDirs) {
     for (const exe of ['7z.exe', '7za.exe']) {
@@ -42,7 +42,7 @@ function find7z() {
     }
   }
 
-  // electron-builder 下载的 7zip 缓存（本地开发机常见）
+  // Caché de 7zip descargada por electron-builder (habitual en equipos de desarrollo)
   const cache = path.join(process.env.LOCALAPPDATA || '', 'electron-builder', 'Cache');
   try {
     for (const d of fs.readdirSync(cache)) {
@@ -53,7 +53,7 @@ function find7z() {
         if (fs.existsSync(p)) return p;
       }
     }
-  } catch (_) { /* 没有缓存目录 */ }
+  } catch (_) { /* No hay carpeta de caché */ }
   return '';
 }
 
@@ -71,7 +71,7 @@ function dirStats(dir) {
   return { files, bytes };
 }
 
-/** 用 7-Zip 压 zip：cwd 设为源目录，让包内路径相对、不带上层目录名 */
+/** Comprime en zip con 7-Zip: cwd es la carpeta de origen para que las rutas internas sean relativas, sin la carpeta superior */
 function zipWith7z(exe, srcDir, outZip, level = 9) {
   const r = spawnSync(exe, ['a', '-tzip', '-mm=Deflate', `-mx=${level}`, '-bso0', '-bsp0', '-y', outZip, '*'], {
     cwd: srcDir,
@@ -83,7 +83,7 @@ function zipWith7z(exe, srcDir, outZip, level = 9) {
   }
 }
 
-/** 兜底：PowerShell Compress-Archive（体积大 5%，只在没装 7-Zip 时用） */
+/** Respaldo: Compress-Archive de PowerShell (5 % más grande; solo si 7-Zip no está instalado) */
 function zipWithPowershell(srcDir, outZip) {
   const ps = `Compress-Archive -Path '${path.join(srcDir, '*')}' -DestinationPath '${outZip}' -CompressionLevel Optimal -Force`;
   const r = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], {
@@ -95,7 +95,7 @@ function zipWithPowershell(srcDir, outZip) {
   }
 }
 
-/** 压缩结果自检：用应用自己的 zip 解析器读一遍，确认条目数与解压总字节对得上 */
+/** Autocomprobación: lee el zip con el propio lector de la app y confirma que coinciden la cantidad de entradas y el total de bytes */
 function verify(zipPath, expect) {
   const { ZipFile } = require('../src/core/zip');
   const zip = new ZipFile(zipPath);

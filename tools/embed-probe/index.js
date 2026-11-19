@@ -1,4 +1,4 @@
-// 探针入口：只做最少的 Electron 初始化，然后把活交给 ../embed-probe.js
+// Entrada de la sonda: solo hace la inicialización mínima de Electron y pasa el trabajo a ../embed-probe.js
 const { app } = require('electron');
 const path = require('path');
 const fs = require('fs');
@@ -8,7 +8,7 @@ function mark(m) { try { fs.appendFileSync(LOG, m + ' ' + new Date().toISOString
 try { fs.mkdirSync(path.dirname(LOG), { recursive: true }); fs.writeFileSync(LOG, ''); } catch (_) {}
 mark('module-loaded');
 
-// 子进程也会跑这个脚本（--type=renderer/gpu/...），一律不掺和主流程
+// Los procesos hijos también ejecutan este script (--type=renderer/gpu/...); nunca intervienen en el flujo principal
 if (process.argv.some((a) => a.startsWith('--type='))) {
   module.exports = {};
 } else {

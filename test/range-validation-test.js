@@ -1,11 +1,11 @@
 'use strict';
 /**
- * 下载器范围校验的纯 Node 测试（不需要真实网络/模拟器）。
- * 覆盖 #92 贡献的 Content-Range 校验与 416 续传修复：
- *   - validRange 逐项比对起止位、总大小、Content-Length；
- *   - 单流遇到 416 时丢弃坏残片、重新完整下载；
- *   - 分块/多源下载遇到不匹配的范围时拒绝，不把损坏字节拼进目标文件。
- * 运行：node test/range-validation-test.js
+ * Pruebas en Node puro de la validación de rangos del descargador (sin red real/emulador).
+ * Cubre la validación de Content-Range y la corrección de reanudación con 416 aportadas en #92:
+ *   - validRange compara uno a uno inicio/fin, tamaño total y Content-Length;
+ *   - con una sola conexión, ante un 416 se descarta el fragmento dañado y se descarga todo de nuevo;
+ *   - la descarga por bloques/multifuente rechaza rangos que no coinciden y no mete bytes dañados en el archivo final.
+ * Ejecutar: node test/range-validation-test.js
  */
 const assert = require('assert/strict');
 const http = require('http');
@@ -56,8 +56,8 @@ const baseOf = (server) => `http://127.0.0.1:${server.address().port}`;
 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lanzadorapk-range-'));
   try {
-    // /416: 带 Range 就回 416，不带 Range 回完整的 "good"
-    // /bad: 探测 bytes=0-0 回合法头，其余请求一律回 bytes 0-3/8（与请求范围不符）
+    // /416: con Range responde 416; sin Range responde el "good" completo
+    // /bad: la prueba bytes=0-0 recibe encabezados válidos; el resto siempre recibe bytes 0-3/8 (no coincide con lo pedido)
     const server = await serve((req, res) => {
       const r = req.headers.range;
       if (req.url === '/416') {
@@ -87,7 +87,7 @@ const baseOf = (server) => `http://127.0.0.1:${server.address().port}`;
 
       await atest('单流 206 范围不符时拒绝', async () => {
         const out = path.join(dir, 'resume');
-        fs.writeFileSync(out, 'xxxx'); // 让请求带 Range: bytes=4-
+        fs.writeFileSync(out, 'xxxx'); // Hace que la petición lleve Range: bytes=4-
         await assert.rejects(download(`${base}/bad`, out), /rango/);
       });
 

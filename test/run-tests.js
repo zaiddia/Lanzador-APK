@@ -1,7 +1,7 @@
 'use strict';
 /**
- * 纯 Node 单元测试（不依赖 Electron / adb / 网络）
- * 运行：npm test
+ * Pruebas unitarias en Node puro (sin depender de Electron / adb / red)
+ * Ejecutar: npm test
  */
 const fs = require('fs');
 const path = require('path');
@@ -28,7 +28,7 @@ function assert(cond, msg) {
 console.log('\n[zip.js]');
 const { ZipArchive } = require('../src/core/zip');
 test('能解析自身所在项目的 package.json 压缩包结构', () => {
-  // 用一个内存里构造的最小 zip（stored 模式）验证解析
+  // Verifica el análisis con un zip mínimo construido en memoria (modo stored)
   const header = Buffer.alloc(30);
   header.writeUInt32LE(0x04034b50, 0);
   header.writeUInt16LE(20, 4);
@@ -51,8 +51,8 @@ test('能解析自身所在项目的 package.json 压缩包结构', () => {
   const eocd = Buffer.alloc(22);
   eocd.writeUInt32LE(0x06054b50, 0);
   eocd.writeUInt16LE(1, 10);
-  eocd.writeUInt32LE(46 + name.length, 12); // 中央目录总大小
-  eocd.writeUInt32LE(30 + name.length + data.length, 16); // 中央目录偏移
+  eocd.writeUInt32LE(46 + name.length, 12); // Tamaño total del directorio central
+  eocd.writeUInt32LE(30 + name.length + data.length, 16); // Desplazamiento del directorio central
 
   const zip = new ZipArchive(Buffer.concat([header, name, data, cen, name, eocd]));
   assert(zip.has('hello.txt'), '应能找到 hello.txt');
@@ -81,8 +81,8 @@ const { parseAxml } = require('../src/core/axml');
 const { ResTable } = require('../src/core/arsc');
 const { parseApk, quickCheck } = require('../src/core/apk');
 
-// 测试夹具：优先用环境变量 LANZADORAPK_TEST_APK 指定，
-// 否则尝试常见的本机 APK 位置（只读，不复制）
+// APK de prueba: primero el indicado en la variable de entorno LANZADORAPK_TEST_APK,
+// si no, se prueban ubicaciones comunes de APK en el equipo (solo lectura, sin copiar)
 function findFixture() {
   const candidates = [
     process.env.LANZADORAPK_TEST_APK,
@@ -131,8 +131,8 @@ if (fixture) {
   console.log('  （跳过：未找到 APK 夹具，可设置 LANZADORAPK_TEST_APK）');
 }
 
-// 合成 APK 的构造器放在 test/lib/make-apk.js：真实夹具缺失时也能覆盖解析栈，
-// 且 run-tests / auto-test 共用同一份（避免两处各写一套字节拼装）。
+// El constructor de APK sintéticos está en test/lib/make-apk.js: cubre la pila de análisis aunque falten los APK reales,
+// y run-tests / auto-test comparten la misma copia (para no tener dos ensamblados de bytes distintos).
 const { buildApkBytes } = require('./lib/make-apk');
 
 console.log('\n[合成 APK：axml + apk 全链路]');
@@ -145,7 +145,7 @@ console.log('\n[合成 APK：axml + apk 全链路]');
         { ns: ANDROID_NS, name: 'label', typed: '测试' },
       ],
     };
-    // 非命名空间属性（如 package）必须传 null 才能取到；这是 parseApk 的关键前提
+    // Los atributos sin espacio de nombres (como package) solo se obtienen pasando null; es la condición clave de parseApk
     assert(attrValue(node, 'package', null) === 'com.a.b', 'package 需要 ns=null');
     assert(attrValue(node, 'package') === null, '默认只认 android 命名空间');
     assert(attrValue(node, 'label') === '测试', 'android 属性走默认命名空间');
@@ -191,23 +191,23 @@ console.log('\n[合成 APK：axml + apk 全链路]');
     ],
   });
   test('屏幕方向：按 Activity 声明统计出应用天然方向', () => {
-    // 红果那种「几十个 portrait + 一个 sensor 启动页」→ portrait
+    // El caso de «decenas de portrait + una pantalla de inicio sensor» → portrait
     const hongguo = [
       act('SplashActivity', 3), act('MainActivity', 1), act('ReaderActivity', 3),
       act('WebActivity', 1), act('DetailActivity', 1),
     ];
     assert(detectOrientation(hongguo, hongguo[0]) === 'portrait', '多数声明 portrait 要判成竖屏');
-    // 墨读那种单 Activity 明确 landscape
+    // El caso de una sola Activity declarada landscape
     const modu = [act('MainActivity', 2)];
     assert(detectOrientation(modu, modu[0]) === 'landscape', '单 landscape 活动要判成横屏');
-    // 全 sensor / 全 unspecified → 无法判断，交给设置
+    // Todo sensor / todo unspecified → no se puede decidir, se deja a la configuración
     const sensorOnly = [act('A', 3), act('B', 11), act('C', 0), act('D', 14)];
     assert(detectOrientation(sensorOnly, sensorOnly[0]) === null, '全跟随重力时应返回 null');
     assert(detectOrientation([act('A', null)], null) === null, '没声明方向时返回 null');
-    // 启动 Activity 加权：它决定用户看到的第一个画面
+    // La Activity de inicio pesa más: decide la primera pantalla que ve el usuario
     const launcherWins = [act('Launcher', 2), act('P1', 1), act('P2', 1), act('P3', 1)];
     assert(detectOrientation(launcherWins, launcherWins[0]) === 'landscape', '启动 Activity 方向要加权');
-    // reversePortrait / userLandscape 这类也要归到正确的一边
+    // reversePortrait / userLandscape y similares también deben ir al lado correcto
     assert(detectOrientation([act('A', 7)], null) === 'portrait', 'reversePortrait 属于竖屏');
     assert(detectOrientation([act('A', 12)], null) === 'landscape', 'userLandscape 属于横屏');
   });

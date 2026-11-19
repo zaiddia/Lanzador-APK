@@ -1,4 +1,4 @@
-/* 应用窗口：只保留顶部一条极简标题栏，其余全是安卓画面 */
+/* Ventana de app: solo una barra de título mínima arriba; el resto es la imagen de Android */
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 :root {
@@ -68,7 +68,7 @@ html, body {
   background: #0b0c0e;
 }
 
-/* 启动遮罩：安卓桌面/开机动画永远不给用户看到 */
+/* Capa de arranque: el usuario nunca ve el escritorio de Android ni la animación de arranque */
 .boot {
   position: absolute;
   inset: 0;

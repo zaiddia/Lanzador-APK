@@ -1,20 +1,20 @@
 'use strict';
 /**
- * 自动检测（自动 debug）内核
+ * Núcleo de la comprobación automática (depuración automática)
  *
- * 分两层，刻意分开：
- *   1) 采集层（src/core/autodebug-probe.js，主进程）：把机器真实状态采成一份纯数据快照 obs；
- *   2) 判定层（本文件，纯函数）：evaluate(obs) → issues[]。
+ * Dos capas, separadas a propósito:
+ *   1) capa de recolección (src/core/autodebug-probe.js, proceso principal): toma el estado real del equipo como una instantánea de datos puros obs;
+ *   2) capa de evaluación (este archivo, funciones puras): evaluate(obs) → issues[].
  *
- * 判定层不碰 fs / child_process / electron，CI 可以直接 require 并单测
- * （教训见记忆 2026-11-17：CI 上 require 顶层依赖 electron 的模块会全红）。
+ * La capa de evaluación no toca fs / child_process / electron; el CI puede hacer require y probarla directamente
+ * (lección de una nota interna del 2026-11-17: en CI, los módulos que dependen de electron en el nivel superior fallan por completo).
  *
- * 一条铁律：obs 里没有的字段一律当作「不知道」，不能因为探测失败就报问题。
- * 误报比漏报更伤用户信任 —— 用户一旦发现弹出来的「检测结果」是假的，
- * 就再也不会相信自动检测给出的任何结论了。
+ * Regla de oro: cualquier campo que falte en obs significa «no se sabe»; un fallo de detección nunca puede reportarse como problema.
+ * Un falso positivo daña más la confianza que uno que se escapa: cuando el usuario descubre que un «resultado de la comprobación» es falso,
+ * ya no vuelve a creer en ninguna conclusión de la comprobación automática.
  */
 
-/** 问题分类（设置页按这个顺序分组展示） */
+/** Categorías de problemas (la configuración las muestra agrupadas en este orden) */
 const CATEGORIES = [
   { id: 'runtime', name: 'Runtime', hint: 'Proceso de la máquina virtual Android, fase de arranque, instantáneas y bloqueos restantes' },
   { id: 'device', name: 'Conexión del dispositivo', hint: 'Autorización de adb y si el dispositivo está en línea' },
@@ -26,10 +26,10 @@ const CATEGORIES = [
 
 const CATEGORY_IDS = CATEGORIES.map((c) => c.id);
 
-/** 严重度排序：数字越大越严重 */
+/** Orden por gravedad: número mayor = más grave */
 const SEVERITY_RANK = { error: 3, warn: 2, info: 1 };
 
-/** 归一化一条问题，保证 UI 拿到的字段永远齐全 */
+/** Normaliza un problema, para que la interfaz siempre reciba todos los campos */
 function normalise(raw) {
   if (!raw || !raw.code) return null;
   const severity = SEVERITY_RANK[raw.severity] ? raw.severity : 'info';
@@ -39,17 +39,17 @@ function normalise(raw) {
     severity,
     title: String(raw.title || raw.code),
     hint: String(raw.hint || ''),
-    // fix 是「一键修复」的动作名，由渲染层映射到具体操作；没有就留空
+    // fix es el nombre de la acción de «reparar con un clic»; la capa de interfaz lo convierte en una operación concreta; si no hay, queda vacío
     fix: raw.fix || '',
-    // detail 是给人看的补充信息（路径、数值等），不进标题
+    // detail es información adicional para personas (rutas, valores, etc.); no va en el título
     detail: raw.detail === undefined || raw.detail === null ? '' : String(raw.detail),
   };
 }
 
 /**
- * 判定：把观测快照变成问题列表
- * @param {object} obs 采集层给出的快照（字段可缺省）
- * @returns {Array<object>} 归一化后的问题列表
+ * Evaluación: convierte la instantánea observada en una lista de problemas
+ * @param {object} obs instantánea de la capa de recolección (los campos pueden faltar)
+ * @returns {Array<object>} lista de problemas normalizada
  */
 function evaluate(obs) {
   const o = obs || {};
@@ -67,9 +67,9 @@ function evaluate(obs) {
     if (it) out.push(it);
   };
 
-  /* ---------------- 运行时 ---------------- */
+  /* ---------------- Runtime ---------------- */
 
-  // 开机失败：直接给最后一条真实原因，别让用户猜
+  // Fallo de arranque: se da directamente la última causa real; que el usuario no tenga que adivinar
   const bootError = runtime.error || (runtime.lastFailure && runtime.lastFailure.error) || '';
   if (bootError) {
     push({
@@ -83,7 +83,7 @@ function evaluate(obs) {
     });
   }
 
-  // 一直卡在引导中：超过阈值还没 ready，多半是快照坏了或镜像有问题
+  // Atascado en el arranque: si supera el umbral sin estar listo, casi siempre es una instantánea dañada o un problema de la imagen
   if (runtime.running && runtime.phase && runtime.phase !== 'ready' && runtime.bootMs > 150000) {
     push({
       code: 'runtime.stuckBoot',
@@ -96,7 +96,7 @@ function evaluate(obs) {
     });
   }
 
-  // 残留锁文件：会让下次启动被判成「AVD 已被占用」直接 FATAL
+  // Archivos de bloqueo restantes: harían que el próximo arranque se tome como «AVD ya en uso» y falle con FATAL
   if (Number(runtime.locks) > 0) {
     push({
       code: 'runtime.staleLocks',
@@ -108,8 +108,8 @@ function evaluate(obs) {
     });
   }
 
-  // 孤儿进程：emulator.exe 只是启动器，qemu 是 detached 的独立进程，
-  // 只杀启动器会留下孤儿占着 multiinstance.lock（记忆 2026-11-13）。
+  // Procesos huérfanos: emulator.exe solo es el lanzador y qemu es un proceso independiente;
+  // matar solo el lanzador deja huérfanos que retienen multiinstance.lock (nota interna 2026-11-13).
   if (Number(runtime.orphans) > 0) {
     push({
       code: 'runtime.orphanProcesses',
@@ -121,7 +121,7 @@ function evaluate(obs) {
     });
   }
 
-  // 快照空壳：文件在但校验不过，每次开机都要「加载失败再冷启动」，等于白留了几 GB
+  // Instantánea vacía: el archivo existe pero no pasa la verificación; cada arranque «falla al cargar y arranca en frío», ocupando varios GB en vano
   if (runtime.snapshotStale) {
     push({
       code: 'runtime.staleSnapshot',
@@ -133,9 +133,9 @@ function evaluate(obs) {
     });
   }
 
-  /* ---------------- 设备连接 ---------------- */
+  /* ---------------- Conexión del dispositivo ---------------- */
 
-  // unauthorized：安卓弹了「允许 USB 调试吗」但没人点（记忆 2026-11-17 的老坑）
+  // unauthorized: Android mostró «¿Permitir la depuración USB?» pero nadie lo confirmó (problema conocido, nota interna 2026-11-17)
   if (device.state === 'unauthorized') {
     push({
       code: 'device.unauthorized',
@@ -165,7 +165,7 @@ function evaluate(obs) {
     });
   }
 
-  /* ---------------- 存储 ---------------- */
+  /* ---------------- Almacenamiento ---------------- */
 
   const freeMB = Number(storage.freeMB) || 0;
   if (freeMB > 0 && freeMB < 2048) {
@@ -190,7 +190,7 @@ function evaluate(obs) {
     });
   }
 
-  // 数据分区实际容量比配置小 → 装的游戏会提示「存储空间不足」
+  // La capacidad real de la partición de datos es menor que la configurada → los juegos dirán «Espacio de almacenamiento insuficiente»
   if (storage.needsReset) {
     push({
       code: 'storage.dataNeedsReset',
@@ -226,9 +226,9 @@ function evaluate(obs) {
     });
   }
 
-  /* ---------------- 设置 ---------------- */
+  /* ---------------- Configuración ---------------- */
 
-  // 方向策略与物理面板打架 → 安卓只给应用中间一条窄画面（记忆 2026-11-18 的老坑）
+  // La estrategia de orientación choca con la pantalla física → Android solo da a la app una franja estrecha en el centro (problema conocido, nota interna 2026-11-18)
   const mode = String(settings.orientationMode || 'auto');
   if (mode === 'portrait' && settings.landscape === true) {
     push({
@@ -271,7 +271,7 @@ function evaluate(obs) {
     });
   }
 
-  /* ---------------- 网络 ---------------- */
+  /* ---------------- Red ---------------- */
 
   if (network.ok === false) {
     push({
@@ -298,7 +298,7 @@ function evaluate(obs) {
     });
   }
 
-  /* ---------------- 日志 ---------------- */
+  /* ---------------- Registro ---------------- */
 
   const errLines = Array.isArray(logs.errors) ? logs.errors.filter(Boolean) : [];
   if (errLines.length) {
@@ -313,7 +313,7 @@ function evaluate(obs) {
     });
   }
 
-  /* ---------------- 加速 ---------------- */
+  /* ---------------- Aceleración ---------------- */
 
   if (accel.checked && accel.ok === false) {
     push({
@@ -330,7 +330,7 @@ function evaluate(obs) {
   return dedupe(out);
 }
 
-/** 同 code 只留最后一条（后一次检测覆盖前一次） */
+/** Del mismo code solo se conserva el último (una comprobación nueva sustituye a la anterior) */
 function dedupe(issues) {
   const map = new Map();
   for (const raw of issues || []) {
@@ -341,14 +341,14 @@ function dedupe(issues) {
   return Array.from(map.values());
 }
 
-/** 按严重度从高到低排 */
+/** Ordena de mayor a menor gravedad */
 function bySeverity(a, b) {
   const d = (SEVERITY_RANK[b.severity] || 0) - (SEVERITY_RANK[a.severity] || 0);
   if (d) return d;
   return String(a.code).localeCompare(String(b.code));
 }
 
-/** 汇总：给状态条计数、给设置页分栏 */
+/** Resumen: conteo para la barra de estado y columnas para la configuración */
 function summarize(issues) {
   const list = dedupe(issues).sort(bySeverity);
   const errors = list.filter((i) => i.severity === 'error').length;
@@ -369,12 +369,12 @@ function summarize(issues) {
     warns,
     infos,
     byCategory,
-    // 一眼能看出「有没有必须马上处理的问题」
+    // Para ver de un vistazo «si hay problemas que haya que resolver ya»
     health: errors ? 'error' : (warns ? 'warn' : (infos ? 'info' : 'ok')),
   };
 }
 
-/** 按分类分组，用于设置页分类渲染 */
+/** Agrupa por categoría para mostrarlos en la configuración */
 function groupByCategory(issues) {
   const list = dedupe(issues).sort(bySeverity);
   return CATEGORIES.map((c) => ({
@@ -384,9 +384,9 @@ function groupByCategory(issues) {
 }
 
 /**
- * 对比两次检测结果：找出「新出现」和「已消失」的问题。
- * 自动检测只在新问题出现时提醒用户，已消失的只做静默记账 ——
- * 每次都弹「已恢复 3 项」会变成噪音。
+ * Compara dos comprobaciones: encuentra los problemas «nuevos» y los «resueltos».
+ * La comprobación automática solo avisa al usuario cuando aparece un problema nuevo; los resueltos solo se anotan en silencio;
+ * avisar cada vez «se recuperaron 3 elementos» se volvería ruido.
  */
 function diff(prevIssues, nextIssues) {
   const prev = new Map((prevIssues || []).map((i) => [i.code, i]));

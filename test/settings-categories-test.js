@@ -1,10 +1,10 @@
 'use strict';
 /**
- * 设置页分类导航 + 搜索（0.6.0）结构测试
+ * Prueba de estructura de la navegación por categorías + búsqueda de la configuración (0.6.0)
  *
- * 设置页是用户最常碰的面，一旦分类与分组对不上就会出现「某个分类点进去是空的」。
- * 这里做源码级断言：HTML 里每个分组都必须有 data-cat，导航项必须与分组用到的分类一致，
- * 前端的分类表必须与 HTML 对得上。
+ * La configuración es la parte que el usuario más toca; si las categorías y los grupos no coinciden, aparece «una categoría que al abrirla está vacía».
+ * Aquí se hacen aserciones sobre el código: cada grupo del HTML debe tener data-cat, los elementos de navegación deben coincidir con las categorías de los grupos,
+ * y la tabla de categorías de la interfaz debe coincidir con el HTML.
  */
 
 const fs = require('fs');
@@ -33,7 +33,7 @@ const html = fs.readFileSync(path.join(ROOT, 'src/ui/index.html'), 'utf8');
 const appJs = fs.readFileSync(path.join(ROOT, 'src/ui/app.js'), 'utf8');
 const css = fs.readFileSync(path.join(ROOT, 'src/ui/style.css'), 'utf8');
 
-/** 取设置面板主体（settingsBody）里的 HTML 片段 */
+/** Toma el fragmento HTML del cuerpo del panel de configuración (settingsBody) */
 const bodyMatch = html.match(/<div class="modal-body" id="settingsBody">([\s\S]*?)\n    <\/div>\n    <\/div>\n    <footer/);
 assert(bodyMatch, '应能定位到设置面板主体');
 
@@ -58,7 +58,7 @@ test('导航项覆盖全部 8 个分类', () => {
 });
 
 test('每个设置分组都归了类（没有漏网的分组）', () => {
-  // 取设置主体里所有顶层分组的起始标签
+  // Toma las etiquetas de apertura de todos los grupos de primer nivel del cuerpo de la configuración
   const groups = bodyMatch[1].match(/<(div class="group"|details class="advanced-group")[^>]*>/g) || [];
   assert(groups.length >= 15, `设置分组应不少于 15 个，实际 ${groups.length}`);
   for (const g of groups) {
@@ -74,7 +74,7 @@ test('分组用到的分类都在导航里（不会出现「点了是空的」�
   for (const u of usedSet) {
     assert(navIds.includes(u), `分类 ${u} 没有对应的导航项`);
   }
-  // 每个分类至少有一个分组，空分类应当从导航里去掉
+  // Cada categoría tiene al menos un grupo; las categorías vacías deben quitarse de la navegación
   for (const n of navIds) {
     assert(used.includes(n), `分类 ${n} 没有任何分组，不该出现在导航里`);
   }
@@ -121,7 +121,7 @@ test('实现了切换、过滤与记忆', () => {
 });
 
 test('搜索是跨分类的（否则搜到了却看不见）', () => {
-  // 过滤时按命中决定可见性，而不是只看当前分类
+  // Al filtrar, la visibilidad la decide la coincidencia, no solo la categoría actual
   const fn = appJs.match(/function applySettingsFilter\(\) \{[\s\S]*?\n\}/);
   assert(fn, '应能定位 applySettingsFilter');
   assert(/g\.hidden = q \? !hit : !inCat/.test(fn[0]), '搜索时应按命中显示（跨分类）');
@@ -130,7 +130,7 @@ test('搜索是跨分类的（否则搜到了却看不见）', () => {
 test('跳转入口都改成了 focusGroup（分类切换后仍能定位到分组）', () => {
   assert(appJs.includes("focusGroup($('runtimeGroup'))"), '部署向导应定位到运行时分组');
   assert(appJs.includes("focusGroup($('perfGroup'))"), '数据分区问题应定位到性能分组');
-  // 旧的直接 scrollIntoView 定位应已被 focusGroup 取代
+  // El viejo posicionamiento directo con scrollIntoView ya debe haberse reemplazado por focusGroup
   const direct = appJs.match(/box\.scrollIntoView\(\{ block: 'start', behavior: 'smooth' \}\)/g) || [];
   assert(direct.length === 0, `不应再有直接 scrollIntoView 的定位（还有 ${direct.length} 处）`);
 });

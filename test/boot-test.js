@@ -1,20 +1,20 @@
 'use strict';
 /**
- * 真实引导测试（默认可跳过，`npm run test:boot` 手动跑）
+ * Prueba de arranque real (se puede omitir por defecto; `npm run test:boot` para ejecutarla a mano)
  *
- * 用 61MB 的 Alpine virt ISO 走一遍产品的真实启动参数：
- *   创建 qcow2 虚拟磁盘 → 以光驱引导 → 从串口确认进入用户态 → 优雅关机
+ * Usa una ISO Alpine virt de 61 MB con los parámetros de arranque reales del producto:
+ *   crea un disco virtual qcow2 → arranca desde la unidad óptica → confirma por el puerto serie que llegó al espacio de usuario → apagado ordenado
  *
- * 目的：引擎层最容易出错的是「参数看起来对，但真机起不来」（machine 类型、accel、
- * 启动顺序、virtio 磁盘、ACPI 关机）。这里用真实 QEMU + 真实 guest 把它钉死。
- * 不需要 Android 镜像，也不需要硬件加速。
+ * Objetivo: lo que más falla en la capa del motor es «los parámetros parecen correctos pero en un equipo real no arranca» (tipo de machine, accel,
+ * orden de arranque, disco virtio, apagado ACPI). Aquí se fija con un QEMU real + un invitado real.
+ * No necesita imagen de Android ni aceleración por hardware.
  */
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 
-// 隔离数据目录：绝不能把测试用的镜像/磁盘路径写进真实用户设置
+// Carpeta de datos aislada: nunca escribir rutas de imágenes/discos de prueba en la configuración real del usuario
 process.env.APPDATA = path.join(os.tmpdir(), `lanzadorapk-boot-test-${Date.now()}`);
 fs.mkdirSync(path.join(process.env.APPDATA, 'lanzadorapk'), { recursive: true });
 
@@ -51,14 +51,14 @@ async function ensureIso() {
   await ensureIso();
   log(`ISO ${(fs.statSync(ISO).size / 1048576).toFixed(0)}MB`);
 
-  // 1) qemu-img 建盘（同时验证产品的 createDisk 工具链）
+  // 1) crear el disco con qemu-img (verifica a la vez la cadena de herramientas createDisk del producto)
   const img = path.join(path.dirname(env.qemu.path), 'qemu-img.exe');
   try { fs.rmSync(DISK, { force: true }); } catch (_) { /* ignore */ }
   const { execFileSync } = require('child_process');
   execFileSync(img, ['create', '-f', 'qcow2', DISK, '2G'], { windowsHide: true });
   log(`虚拟磁盘 ${(fs.statSync(DISK).size / 1024).toFixed(0)}KB（稀疏）`);
 
-  // 2) 用产品真实的启动参数
+  // 2) usar los parámetros de arranque reales del producto
   runtime._hv = env.hypervisor;
   store.saveSettings({
     runtime: { isoPath: ISO, diskPath: DISK },
@@ -73,7 +73,7 @@ async function ensureIso() {
   let exited = false;
   proc.on('exit', () => { exited = true; });
 
-  // 3) 等 guest 进入用户态（串口出现登录提示即为引导成功）
+  // 3) esperar a que el invitado llegue al espacio de usuario (el aviso de inicio de sesión en el puerto serie indica que arrancó)
   const start = Date.now();
   let booted = false;
   while (Date.now() - start < 180000) {
@@ -94,7 +94,7 @@ async function ensureIso() {
   }
   log(`✓ guest 已进入用户态（${elapsed}s）`);
 
-  // 4) 优雅关机：先 system_powerdown，超时再 quit（正是产品 stop() 的行为）
+  // 4) apagado ordenado: primero system_powerdown y, si se agota el tiempo, quit (justo lo que hace stop() en el producto)
   let graceful = false;
   try {
     await runtime.monitorCmd('system_powerdown');

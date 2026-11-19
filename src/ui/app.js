@@ -13,7 +13,7 @@ const state = {
   menuPkg: null,
 };
 
-/* ---------------- 工具 ---------------- */
+/* ---------------- Utilidades ---------------- */
 
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => (
@@ -43,16 +43,16 @@ function relTime(ts) {
 }
 
 /**
- * 迷你 toast
+ * Mini toast
  *
- * 同一类消息做去重 + 数量上限：
- * 安装失败时里面有「运行时启动日志」在持续推送，以前每条都新建一个 toast，
- * 于是屏幕上会不停叠加同一条错误，看起来像「失败信息一直循环」。
+ * Deduplicación + límite de cantidad por tipo de mensaje:
+ * al fallar una instalación llegan sin parar los «registros de arranque del runtime», y antes cada uno creaba un toast nuevo,
+ * así que en pantalla se apilaba el mismo error una y otra vez, como si «el mensaje de error estuviera en bucle».
  */
 let _toastSeq = 0;
 function toast({ title, body = '', type = 'info', progress = null, sticky = false, spinner = false }) {
   const wrap = $('toastWrap');
-  // ① 去重：同样的标题 + 正文（4 秒内）只刷新那一条，不叠加
+  // ① Deduplicación: el mismo título + texto (en 4 s) solo actualiza ese toast, sin apilar
   const key = `${title}|${body}`;
   const dup = [...wrap.children].find((n) => n.dataset.key === key && Date.now() - Number(n.dataset.at || 0) < 4000);
   if (dup) {
@@ -66,7 +66,7 @@ function toast({ title, body = '', type = 'info', progress = null, sticky = fals
       },
     };
   }
-  // ② 上限：同时最多 4 条，超出先挤掉最旧的
+  // ② Límite: como máximo 4 a la vez; si se supera se quita el más viejo
   while (wrap.children.length >= 4) wrap.firstElementChild.remove();
 
   const el = document.createElement('div');
@@ -111,7 +111,7 @@ function toast({ title, body = '', type = 'info', progress = null, sticky = fals
   return ctl;
 }
 
-/* ---------------- 渲染 ---------------- */
+/* ---------------- Renderizado ---------------- */
 
 function visibleApps() {
   const q = state.filter.trim().toLowerCase();
@@ -140,9 +140,9 @@ function renderGrid() {
     return;
   }
 
-  // 末尾放一块「添加应用」虚线卡片。
-  // 目的不只是好看：应用少的时候下面是一大片空白，用户不知道该干什么；
-  // 这块卡片把「还能拖 APK 进来」这件事直接摆在眼前，也顺手填掉了空白。
+  // Al final va una tarjeta punteada «Agregar app».
+  // No es solo estética: con pocas apps queda un gran espacio vacío y el usuario no sabe qué hacer;
+  // esta tarjeta pone a la vista que «se pueden arrastrar APK», y de paso llena el vacío.
   grid.innerHTML = apps.map((a) => `
     <div class="card" data-pkg="${esc(a.package)}" title="${esc(a.label)} · ${esc(a.package)}">
       ${a.pinned ? '<span class="pin">★</span>' : ''}
@@ -168,7 +168,7 @@ function renderGrid() {
 `;
 }
 
-/* ---------------- 数据刷新 ---------------- */
+/* ---------------- Actualización de datos ---------------- */
 
 async function refreshApps() {
   try {
@@ -210,7 +210,7 @@ async function refreshStatus() {
       tag.className = 'brand-tag';
     } else if (s.needsSetup === 'accel') {
       dot.className = 'dot warn';
-      // 说清「怎么修」而不是只说「没开」——这句是状态条上最容易被看到的位置
+      // Explica «cómo arreglarlo» y no solo «está desactivado»: esta frase va en el lugar más visible de la barra de estado
       text.textContent = 'Sin aceleración por hardware: se usa emulación por software (muy lenta). Pulsa «Comprobación del entorno → Reparar» abajo a la derecha';
       tag.textContent = 'Emulación por software';
       tag.className = 'brand-tag';
@@ -243,8 +243,8 @@ async function refreshStatus() {
       tag.className = 'brand-tag';
     }
     $('statusDevice').textContent = s.deviceOnline ? (s.serial || '') : '';
-    // 网络状态：这是用户最容易踩的坑（应用里一直「网络错误」，但看不出是虚拟机没网）。
-    // 直接摆在状态栏，出问题时一眼能看到，不用去翻日志。
+    // Estado de la red: el problema más común para el usuario (la app dice siempre «error de red» sin que se note que la máquina virtual no tiene red).
+    // Va directo en la barra de estado: si hay un problema se ve de un vistazo, sin revisar registros.
     const netEl = $('statusNet');
     const netSep = $('statusNetSep');
     if (netEl) {
@@ -266,11 +266,11 @@ async function refreshStatus() {
   }
 }
 
-/* ---------------- 运行时部署（固定在设置里） ---------------- */
+/* ---------------- Instalación del runtime (fija en la configuración) ---------------- */
 
 /**
- * 运行时/部署/自检面板现在都收在「设置」里，主界面只留已安装应用。
- * 保留 showSetup 给托盘菜单与 ui:navigate 复用，语义改为「打开设置并定位到运行时」。
+ * Los paneles de runtime/instalación/comprobación ahora están en «Configuración»; la pantalla principal solo muestra las apps instaladas.
+ * Se conserva showSetup para que lo reutilicen el menú de la bandeja y ui:navigate; ahora significa «abrir la configuración y ubicarse en el runtime».
  */
 function showSetup(on) {
   if (!on) { $('setupGuide').hidden = true; return; }
@@ -303,8 +303,8 @@ function renderSetup(s) {
   const hv = env.hypervisor || {};
   const accel = env.accel || s.accel || {};
 
-  // 启动即见已安装应用：不再用部署向导整屏接管主界面，
-  // 状态只在设置里的运行时面板 + 底部状态条上体现。
+  // Al iniciar se ven las apps instaladas: el asistente de instalación ya no ocupa toda la pantalla principal,
+  // y el estado solo aparece en el panel del runtime de la configuración + la barra de estado inferior.
   const accelOk = accel.ok || hv.whpx;
   const adbDone = !!(env.adb && env.adb.ok);
   const emuDone0 = !!(env.emulator && env.emulator.ok);
@@ -331,8 +331,8 @@ function renderSetup(s) {
   const busy = state.setupBusy;
   const booting = s.phase === 'booting';
 
-  // 只保留一个步骤：下载、参数自适应、开机全部由「一键完成」串起来，
-  // 且首次启动会在后台自动跑，用户不需要逐步点击。
+  // Queda un solo paso: descarga, parámetros adaptativos y arranque, todo encadenado en «Completar con un clic»,
+  // y en el primer inicio corre solo en segundo plano, sin que el usuario pulse paso a paso.
   const allDone = !!(env.adb && env.adb.ok) && emuDone && imgDone;
   const left = [];
   if (!(env.adb && env.adb.ok)) left.push('Herramientas adb');
@@ -360,8 +360,8 @@ function renderSetup(s) {
   $('setupSteps').innerHTML = stepRow(step);
   $('btnDeployAll').disabled = !!busy;
   $('btnDeployAll').textContent = busy ? 'Preparando…' : (allDone ? 'Completado · clic para revisar' : 'Completar con un clic');
-  // 「上次为什么没起来」优先显示落盘的失败记录：进程重启后内存里的 diagnosis 是空的，
-  // 只显示 autoProfile 会让用户完全看不出原因（issue #20/#25 的报告就是这样）。
+  // «Por qué no arrancó la última vez» muestra primero el registro de fallo guardado en disco: tras reiniciar el proceso, el diagnosis en memoria está vacío,
+  // y mostrar solo autoProfile no dejaría ver la causa (así eran los informes de las issues #20/#25).
   const lf = s.lastFailure;
   const lastMsg = (lf && lf.diagnosis && lf.diagnosis.title)
     ? `Último arranque fallido: ${lf.diagnosis.title}`
@@ -376,7 +376,7 @@ function store_getDiskSize() {
 
 function setStepBusy(key, on) {
   state.setupBusy = on ? key : null;
-  // 五步已合并成一行，所有子步骤的进度都落在这唯一的进度条上
+  // Los cinco pasos se unieron en una fila; el progreso de todos los subpasos va en esa única barra
   const row = $('setupSteps').querySelector('[data-step="all"]');
   if (row) {
     row.classList.toggle('busy', !!on);
@@ -405,8 +405,8 @@ async function deployAll() {
   if (state.setupBusy) return;
   setStepBusy('all', true);
   try {
-    // 一次调用把 adb / 引擎 / 系统镜像全装完，进度统一显示在唯一那一行
-    // 用户点「一键部署」属于明确的手动重试，绕过失败冷却
+    // Una sola llamada instala adb / motor / imagen del sistema; el progreso se muestra en esa única fila
+    // Que el usuario pulse «Completar con un clic» es un reintento manual explícito; se salta la espera tras fallos
     const r = await api.autoDeploy({ force: true });
     if (!r || !r.ok) {
       toast({ title: 'Error de preparación', body: (r && r.error) || 'Revisa tu conexión e inténtalo de nuevo', type: 'error', sticky: true });
@@ -479,9 +479,9 @@ async function markInstalled() {
 
 
 
-/* ---------------- 安装 ---------------- */
+/* ---------------- Instalación ---------------- */
 
-/** 把安装失败翻译成「下一步该做什么」，只对最常见的几种做提示，其它原样显示 */
+/** Convierte un fallo de instalación en «qué hacer ahora»; solo da indicaciones para los casos más comunes, el resto se muestra tal cual */
 function friendlyInstallErrorText(msg) {
   const s = String(msg || 'Error desconocido');
   if (/INSUFFICIENT_STORAGE|not enough space|空间不足|espacio insuficiente|no queda espacio|ENOSPC/i.test(s)) {
@@ -499,9 +499,9 @@ function friendlyInstallErrorText(msg) {
   return s;
 }
 
-/* 当前那条「正在安装…」的 sticky 提示。install:error 事件要能把它收掉：
- * 主进程是先 send('install:error') 再让 invoke 失败的，两者都可能到得很晚，
- * 只靠 catch 收会出现「报错了右下角还在转圈」。 */
+/* El aviso fijo actual «Instalando…». El evento install:error debe poder quitarlo:
+ * el proceso principal envía primero send('install:error') y luego hace fallar el invoke, y ambos pueden llegar tarde;
+ * quitarlo solo en el catch dejaría «hubo un error y abajo a la derecha sigue girando». */
 let installToast = null;
 
 async function installFiles(paths) {
@@ -535,10 +535,10 @@ async function installFiles(paths) {
       ok++;
     } catch (e) {
       failed++;
-      // 先把那条「正在安装…」的 sticky 提示收掉，否则它会一直转圈、还继续被
-      // 运行时日志刷新 —— 用户看到的就是「失败信息一直在循环」。
-      // 错误提示统一由下面的 install:error 监听器负责（带文件名与中文原因），
-      // 这里不再重复弹一条。
+      // Primero se quita el aviso fijo «Instalando…»; si no, seguiría girando y actualizándose
+      // con los registros del runtime: el usuario vería «el mensaje de error en bucle».
+      // El aviso de error lo maneja el oyente install:error de abajo (con nombre de archivo y motivo explicado),
+      // así que aquí no se muestra otro.
       try { off(); } catch (_) { /* ignore */ }
       t.dismiss();
       if (installToast === t) installToast = null;
@@ -552,7 +552,7 @@ async function installFiles(paths) {
   if (ok && !failed) $('search').value = '';
 }
 
-/* ---------------- 应用操作 ---------------- */
+/* ---------------- Acciones de apps ---------------- */
 
 async function launchApp(pkg) {
   const app = state.apps.find((a) => a.package === pkg);
@@ -565,7 +565,7 @@ async function launchApp(pkg) {
   });
   const r = await api.launch(pkg);
   if (r.ok) {
-    // 应用有自己的窗口，主界面自动收起；这里只留一句提示，然后隐藏窗口
+    // La app tiene su propia ventana y la principal se oculta sola; aquí solo queda un aviso y luego se oculta la ventana
     t.update({ title: 'Iniciada', body: 'La app se ejecuta en su propia ventana (arriba puedes rotar la pantalla).', type: 'ok' });
     setTimeout(t.dismiss, 1600);
     setTimeout(() => api.winHide(), 900);
@@ -600,13 +600,13 @@ async function uninstall(pkg) {
   }
 }
 
-/* ---------------- 右键菜单 ---------------- */
+/* ---------------- Menú contextual ---------------- */
 
 const MENU_ITEMS = [
   { key: 'open', label: 'Abrir app', kbd: 'Enter' },
-  // 只在应用真的在运行时才出现（见 showMenu 里的过滤）。
-  // 以前完全没有这一项，独立窗口模式下又没有可点的关闭按钮，
-  // 应用一起来就关不掉，只能退到托盘退出整个 LanzadorAPK。
+  // Solo aparece si la app está realmente en ejecución (ver el filtro en showMenu).
+  // Antes esta opción no existía, y en modo de ventana independiente no había un botón de cierre que pulsar:
+  // una vez iniciada la app no se podía cerrar, solo salir de todo LanzadorAPK desde la bandeja.
   { key: 'stop', label: 'Cerrar app', onlyRunning: true },
   { key: 'shortcut', label: 'Crear acceso directo en el escritorio' },
   { key: 'orientation', label: 'Horizontal / vertical' },
@@ -669,8 +669,8 @@ async function handleMenu(act) {
     }
     case 'shortcut': return createShortcut(pkg);
     case 'orientation': {
-      // 三态循环：跟随应用 → 横屏 → 竖屏 → 跟随应用
-      // 这样红果这类被清单判成竖屏的应用，用户点一下就能强制横屏并记住。
+      // Ciclo de tres estados: según la app → horizontal → vertical → según la app
+      // Así, una app que el manifiesto marca como vertical se puede forzar a horizontal con un clic, y se recuerda.
       const cur = app.orientationOverride;
       const next = cur === 'landscape' ? 'portrait' : (cur === 'portrait' ? null : 'landscape');
       try {
@@ -705,8 +705,8 @@ async function handleMenu(act) {
 }
 
 /**
- * 按键映射预设选择器。用 confirm + prompt 做最简交互（不引入新 UI 组件）。
- * 后续可以做成更精致的弹窗编辑器。
+ * Selector de perfiles de asignación de teclas. Usa confirm + prompt para la interacción más simple (sin componentes de interfaz nuevos).
+ * Más adelante se puede hacer un editor emergente más elaborado.
  */
 async function showKeymapPicker(pkg, label) {
   try {
@@ -717,7 +717,7 @@ async function showKeymapPicker(pkg, label) {
     if (hasCurrent) lines.unshift('0. Quitar la asignación actual');
     const msg = `Elige un perfil de teclas para «${label}»:\n\n${lines.join('\n')}\n\nEscribe el número:`;
     const input = window.prompt(msg, hasCurrent ? '0' : '1');
-    if (input === null) return; // 取消
+    if (input === null) return; // Cancelar
     const idx = parseInt(input, 10);
     if (hasCurrent && idx === 0) {
       await api.keymap.setMap(pkg, []);
@@ -737,9 +737,9 @@ async function showKeymapPicker(pkg, label) {
   }
 }
 
-/* ---------------- 设置 ---------------- */
+/* ---------------- Configuración ---------------- */
 
-// ---------------- 安卓系统设置 ----------------
+// ---------------- Ajustes del sistema Android ----------------
 
 let volumeTimer = null;
 
@@ -805,14 +805,14 @@ function bindAndroid() {
   $('btnAndroidApps').addEventListener('click', () => open('apps'));
 }
 
-/** 设置页字段同步：只剩自带运行时，所有资源项都露出来，不再按底座切换 */
+/** Sincronización de campos de la configuración: solo queda el runtime integrado, así que se muestran todos los recursos sin cambiar según el backend */
 function syncBackendFields() {
   const perf = $('perfGroup');
   if (perf) perf.hidden = false;
   refreshResources();
 }
 
-/** 本机资源上限 + 当前分配（设置页里那几行灰字） */
+/** Límite de recursos del equipo + asignación actual (esas líneas grises de la configuración) */
 async function refreshResources() {
   const bNote = $('builtinResNote');
   if (!bNote) return;
@@ -831,7 +831,7 @@ async function refreshResources() {
     + (r.verdict && r.verdict.note ? ` ${r.verdict.note}` : '');
 }
 
-/** 本机体检：渲染报告（每条带等级点和可执行动作） */
+/** Diagnóstico del equipo: renderiza el informe (cada elemento con su punto de nivel y una acción concreta) */
 function renderPreflight(res) {
   const list = $('preflightList');
   const sum = $('preflightSummary');
@@ -929,7 +929,7 @@ async function runPreflight() {
   return r;
 }
 
-/** 驱动（兼容补丁）：渲染清单 + 命中状态 */
+/** Controladores (parches de compatibilidad): renderiza la lista + el estado de coincidencia */
 function renderDrivers(r) {
   const list = $('drvList');
   const sum = $('drvSummary');
@@ -1064,20 +1064,20 @@ function fillSettings(s) {
   if ($('setAutoRotate')) $('setAutoRotate').value = d.autoRotate === false ? 'off' : 'on';
   if ($('setTabletMode')) $('setTabletMode').value = d.tabletMode === false ? 'off' : 'on';
   $('setPortrait').value = d.portrait || '900x1600';
-  // 0.6.0 起默认原生窗口：只有显式 true 才是嵌入模式（旧配置里 undefined 视为原生）
+  // Desde 0.6.0 la ventana nativa es el valor por defecto: solo true explícito es modo incrustado (undefined en configuraciones viejas se toma como nativo)
   if ($('setWindowEmbed')) $('setWindowEmbed').value = d.windowEmbed === true ? 'embed' : 'detached';
   $('portraitField').hidden = $('setDisplayMode').value === 'fullscreen';
 }
 
-/** 数据分区实际大小 + 磁盘余量，显示在设置页容量选择下方 */
+/** Tamaño real de la partición de datos + espacio libre en disco, mostrado bajo el selector de capacidad de la configuración */
 async function refreshDataInfo() {
   const el = $('dataNote');
   if (!el) return;
   const info = await api.dataInfo().catch(() => null);
   if (!info) { el.textContent = 'No se pudo leer la información de la partición de datos'; return; }
   const auto = Number(($('setDataGB') || {}).value || 0) === 0;
-  // 有 quickboot 差量盘时底座镜像的大小不等于 guest 看到的容量（实测 8GB 镜像、guest 5.7GB），
-  // 与其显示一个会误导人的数字，不如明确说「以运行时为准」。
+  // Con el disco diferencial quickboot el tamaño de la imagen base no es la capacidad que ve el invitado (probado: imagen de 8 GB, invitado 5,7 GB);
+  // en vez de mostrar un número engañoso, se dice claramente «manda la del runtime».
   const img = info.overlay
     ? 'Disco diferencial de arranque rápido (la capacidad real es la de /data en el runtime)'
     : (info.fsGB ? `Sistema de archivos real ${info.fsGB} GB` : (info.imageGB ? `${info.imageGB} GB` : 'Todavía no creada'));
@@ -1089,14 +1089,14 @@ async function refreshDataInfo() {
     + 'Si un juego dice «Espacio de almacenamiento insuficiente», aumenta este valor y pulsa «Ampliar ahora»; si se puede ampliar en el sitio, no se pierden las apps instaladas.';
 }
 
-/* ---------------- 设置页：分类导航 + 搜索 ---------------- */
+/* ---------------- Configuración: navegación por categorías + búsqueda ---------------- */
 
 /**
- * 设置项越来越多，一条长滚动找起来很费劲（用户 0.6.0 的原话：
- * 「设置内做好分类功能」）。这里把设置按用途分成 8 类，左侧一列导航。
+ * La configuración tiene cada vez más opciones y buscar en una larga lista es pesado (pedido literal de usuarios de la 0.6.0:
+ * «organizar la configuración por categorías»). Aquí se divide por uso en 8 categorías, con una columna de navegación a la izquierda.
  *
- * 分类表必须与 index.html 里每个分组的 data-cat 一致 ——
- * test/settings-categories-test.js 会校验这一致性。
+ * La tabla de categorías debe coincidir con el data-cat de cada grupo en index.html;
+ * test/settings-categories-test.js verifica esa coincidencia.
  */
 const SETTINGS_CATS = [
   { id: 'basic', name: 'General' },
@@ -1111,12 +1111,12 @@ const SETTINGS_CATS = [
 
 const settingsCatState = { cat: 'basic', query: '' };
 
-/** 设置里所有带分类标记的分组（.group 和 details.advanced-group 都算） */
+/** Todos los grupos de la configuración con marca de categoría (cuentan .group y details.advanced-group) */
 function settingsGroups() {
   return Array.from(document.querySelectorAll('#settingsBody [data-cat]'));
 }
 
-/** 分组内是否命中搜索词：标题、字段名、说明文字都算 */
+/** Si el grupo coincide con la búsqueda: cuentan el título, los nombres de campo y los textos de ayuda */
 function groupMatches(group, q) {
   if (!q) return true;
   const text = (group.textContent || '').toLowerCase();
@@ -1125,7 +1125,7 @@ function groupMatches(group, q) {
   return !!title && title.textContent.toLowerCase().includes(q);
 }
 
-/** 切到某个分类 */
+/** Cambia a una categoría */
 function switchSettingsCat(cat, { keepQuery = false } = {}) {
   const target = SETTINGS_CATS.some((c) => c.id === cat) ? cat : 'basic';
   settingsCatState.cat = target;
@@ -1142,8 +1142,8 @@ function switchSettingsCat(cat, { keepQuery = false } = {}) {
 }
 
 /**
- * 应用可见性：搜索时跨分类展示命中的分组（否则搜到的东西藏在别的分类里，
- * 用户会以为「搜了没反应」）；没搜索时只显示当前分类。
+ * Visibilidad: al buscar se muestran los grupos coincidentes de todas las categorías (si no, lo encontrado quedaría oculto en otra categoría
+ * y el usuario creería que «la búsqueda no hace nada»); sin búsqueda solo se ve la categoría actual.
  */
 function applySettingsFilter() {
   const q = settingsCatState.query.trim().toLowerCase();
@@ -1155,20 +1155,20 @@ function applySettingsFilter() {
     g.hidden = q ? !hit : !inCat;
     if (hit) hitPerCat[g.dataset.cat] = (hitPerCat[g.dataset.cat] || 0) + 1;
   }
-  // 分类按钮：搜索时标出哪些分类有命中项
+  // Botones de categoría: al buscar marcan qué categorías tienen coincidencias
   document.querySelectorAll('#setNav .set-nav-item').forEach((b) => {
     const n = hitPerCat[b.dataset.cat] || 0;
     b.classList.toggle('dim', !!q && n === 0);
     b.title = q ? `${n} coincidencias` : '';
   });
-  // 最后一个可见分组不画分隔线（分组被隐藏后 :last-child 会选错对象）
+  // El último grupo visible no dibuja línea separadora (con grupos ocultos :last-child elegiría mal)
   const visible = groups.filter((g) => !g.hidden);
   visible.forEach((g) => g.classList.remove('last-visible'));
   if (visible.length) visible[visible.length - 1].classList.add('last-visible');
   updateCatBadges();
 }
 
-/** 定位到某个分组：先切到它所属的分类，再滚动过去 */
+/** Ubica un grupo: primero cambia a su categoría y luego se desplaza hasta él */
 function focusGroup(el) {
   if (!el) return;
   const cat = el.dataset && el.dataset.cat;
@@ -1200,7 +1200,7 @@ function bindSettingsCategory() {
       if (clear) clear.hidden = !settingsCatState.query;
       applySettingsFilter();
     });
-    // 回车：跳到第一个命中的分组
+    // Enter: salta al primer grupo coincidente
     search.addEventListener('keydown', (e) => {
       if (e.key !== 'Enter') return;
       e.preventDefault();
@@ -1217,7 +1217,7 @@ function bindSettingsCategory() {
     });
   }
 
-  // 记住上次停留的分类
+  // Recuerda la última categoría visitada
   try {
     const last = localStorage.getItem('lanzadorapk.settings.cat');
     if (last && SETTINGS_CATS.some((c) => c.id === last)) settingsCatState.cat = last;
@@ -1225,9 +1225,9 @@ function bindSettingsCategory() {
   switchSettingsCat(settingsCatState.cat);
 }
 
-/* ---------------- 自动检测（自动 debug）---------------- */
+/* ---------------- Comprobación automática (depuración automática) ---------------- */
 
-/** 自动检测的问题分类名（与 src/core/autodebug.js 的 CATEGORIES 对应） */
+/** Nombres de categorías de problemas de la comprobación automática (corresponden a CATEGORIES de src/core/autodebug.js) */
 const DEBUG_CATS = [
   { id: 'runtime', name: 'Runtime' },
   { id: 'device', name: 'Conexión del dispositivo' },
@@ -1303,12 +1303,12 @@ function renderAutodebug(res) {
   updateCatBadges();
 }
 
-/** 分类按钮上的问题角标：只在有问题的分类上显示数字 */
+/** Insignia de problemas en los botones de categoría: solo muestra el número en las categorías con problemas */
 function updateCatBadges() {
   const issues = (autodebugLast && autodebugLast.issues) || [];
   document.querySelectorAll('#setNav .set-nav-badge').forEach((el) => {
     const cat = el.dataset.badge;
-    // 自动检测的问题不一定都归属某个设置分类，只有设置类问题才在「诊断与修复」上打标
+    // No todos los problemas de la comprobación pertenecen a una categoría de configuración; solo los de configuración se marcan en «Diagnóstico y reparación»
     const n = cat === 'diag' ? issues.filter((i) => i.severity === 'error').length : 0;
     el.hidden = n === 0;
     el.textContent = n ? String(n) : '';
@@ -1416,7 +1416,7 @@ async function openSettings() {
   refreshAndroid();
   refreshDataInfo();
   applySettingsFilter();
-  // 先把上一次的检测结果铺上（别让面板空着等），再后台刷新一份
+  // Primero se muestra el resultado de la comprobación anterior (para que el panel no quede vacío esperando) y luego se actualiza en segundo plano
   api.autodebugState().then((r) => { if (r) renderAutodebug(r); }).catch(() => {});
 }
 
@@ -1424,11 +1424,11 @@ function closeSettings() {
   $('settingsMask').classList.remove('on');
 }
 
-/* ---------------- 软件更新 ---------------- */
+/* ---------------- Actualizaciones ---------------- */
 
 let lastUpdate = null;
 
-/** 把一次检查结果画到设置面板（也用于启动时静默检查推送过来的状态） */
+/** Dibuja en la configuración el resultado de una búsqueda (también para el estado que envía la comprobación silenciosa al iniciar) */
 function renderUpdate(info) {
   lastUpdate = info || null;
   const cur = $('updateCurrent');
@@ -1441,8 +1441,8 @@ function renderUpdate(info) {
 
   if (info.ok === false) {
     st.textContent = `Error en la comprobación: ${info.error || 'Red no disponible'}`;
-    // 检查失败也要给一条出路：直接把发布页打开，用户至少能手动下载。
-    // 以前这里是「什么都不显示」，用户只会觉得「更新功能坏了」。
+    // Si la búsqueda falla también hay que dar una salida: se abre la página de versiones y el usuario al menos puede descargar a mano.
+    // Antes aquí «no se mostraba nada» y el usuario solo pensaba que «la actualización está rota».
     showUpdateBtn(true);
     btn.textContent = 'Abrir página de descarga';
     btn.dataset.mode = 'manual';
@@ -1451,8 +1451,8 @@ function renderUpdate(info) {
     return;
   }
   if (info.hasUpdate) {
-    // 如实说明这次是哪个源给出的版本、另一个源为什么没参与 ——
-    // 用户排查「为什么检查更新很慢」时，这一行比任何日志都直接。
+    // Se dice con honestidad qué fuente dio la versión y por qué otra no participó;
+    // al investigar «por qué la búsqueda de actualizaciones es lenta», esta línea es más directa que cualquier registro.
     const src = (info.sources || []).map((x) => `${x.name} ${x.tag || ''}`.trim()).join(' / ');
     const bad = (info.unreachable || []).map((x) => x.name).join(',');
     const stale = info.stale ? ' (caché sin conexión, puede no estar actualizada)' : '';
@@ -1475,7 +1475,7 @@ function renderUpdate(info) {
   }
 }
 
-/** .btn 自带 display:inline-flex，会盖掉 hidden 属性，所以这里直接改 display */
+/** .btn trae display:inline-flex, que anula el atributo hidden, así que aquí se cambia display directamente */
 function showUpdateBtn(on) {
   const btn = $('btnDoUpdate');
   if (!btn) return;
@@ -1551,7 +1551,7 @@ function bindUpdate() {
     }
   });
 
-  // 打开设置时如果还没结果，就顺手查一次（放后台，不打扰）
+  // Si al abrir la configuración aún no hay resultado, se busca de paso (en segundo plano, sin molestar)
   runCheck(true).catch(() => {});
 }
 
@@ -1614,9 +1614,9 @@ function bindSettings() {
 
   $('setAdbPath').addEventListener('change', (e) => save({ adbPath: e.target.value.trim() }));
   $('setSystemImage').addEventListener('change', (e) => save({ runtime: { isoPath: e.target.value.trim() } }));
-  // 内存 / 核心：填了具体值就关掉「自动」，填 0 又回到自动。
-  // 旧代码只写 memoryMB，而 overridesFromSettings 只在 autoMemory=false 时才认它，
-  // 于是「手动填了内存」一直被忽略 —— 这是设置页最容易被当成“没用”的一项。
+  // Memoria / núcleos: con un valor concreto se desactiva «automático»; con 0 vuelve a automático.
+  // El código anterior solo escribía memoryMB, y overridesFromSettings solo lo aceptaba con autoMemory=false,
+  // así que «puse la memoria a mano» siempre se ignoraba: la opción de la configuración que más parecía «no servir».
   $('setMemory').addEventListener('change', (e) => {
     const v = Number(e.target.value) || 0;
     save(v > 0 ? { engine: { memoryMB: v, autoMemory: false } } : { engine: { memoryMB: 0, autoMemory: true } });
@@ -1627,7 +1627,7 @@ function bindSettings() {
   });
   if ($('setResourceMode')) {
     $('setResourceMode').addEventListener('change', async (e) => {
-      // 资源策略会连带改 liteMode / priorityMode / renderSize（主进程里翻译）
+      // La estrategia de recursos cambia también liteMode / priorityMode / renderSize (lo traduce el proceso principal)
       state.settings = await api.setSettings({ engine: { resourceMode: e.target.value } });
       fillSettings(state.settings);
       toast({ title: 'Estrategia de recursos cambiada', body: 'Se aplica la próxima vez que abras una app', type: 'ok' });
@@ -1672,8 +1672,8 @@ function bindSettings() {
       $('btnGrowData').disabled = false;
       $('btnGrowData').textContent = old;
       if (r && !r.ok && r.needsReset) {
-        // 快速启动的差量盘挡着：就地扩容做不到，只能按新容量重建 /data。
-        // 这是明确的数据丢失操作，必须单独再确认一次。
+        // El disco diferencial de arranque rápido lo impide: no se puede ampliar en el sitio, solo recrear /data con la nueva capacidad.
+        // Es una operación que pierde datos; hay que confirmarla aparte.
         const again = await api.confirm({
           title: 'Hay que restablecer los datos de Android para ampliar',
           message: `Android usa el disco diferencial de arranque rápido y la ampliación en el sitio no lo alcanza. Para tener ${gb} GB hay que recrear /data con la nueva capacidad.`,
@@ -1730,7 +1730,7 @@ function bindSettings() {
   $('setPriorityMode').addEventListener('change', (e) => save({ engine: { priorityMode: e.target.value } }));
   const savePointer = async (patch) => {
     await save({ engine: patch });
-    // 立刻按当前窗口焦点重装/卸载钩子，不用等下次切窗口
+    // Se instala/quita el gancho enseguida según el foco de la ventana actual, sin esperar al próximo cambio de ventana
     api.refreshPointerMapping().catch(() => {});
   };
   $('setMouseRightBack').addEventListener('change', (e) => savePointer({ mouseRightBack: e.target.checked }));
@@ -1744,7 +1744,7 @@ function bindSettings() {
   }
   $('setDeepTrim').addEventListener('change', async (e) => {
     await save({ engine: { deepTrim: e.target.checked } });
-    // 关掉深度裁剪必须把之前 pm disable-user 的包恢复回来，否则影响是持久的
+    // Al desactivar el recorte profundo hay que restaurar los paquetes desactivados con pm disable-user; si no, el efecto es permanente
     if (!e.target.checked) {
       api.restoreSystemApps().catch(() => {});
       toast({ title: 'Componentes del sistema restaurados', body: 'Recorte profundo desactivado; restaurando paquetes en segundo plano', type: 'info' });
@@ -1829,7 +1829,7 @@ function bindSettings() {
   });
   $('setWindowEmbed').addEventListener('change', async (e) => {
     const embed = e.target.value === 'embed';
-    // windowEmbedChosen 标记「用户自己选过」：之后升级不会再被默认值迁移覆盖。
+    // windowEmbedChosen marca que «el usuario lo eligió»: las actualizaciones posteriores ya no lo sobrescriben con la migración del valor por defecto.
     state.settings = await api.setSettings({
       display: { windowEmbed: embed, windowEmbedChosen: true },
     });
@@ -1885,7 +1885,7 @@ function bindSettings() {
     }
   });
 
-  // 重置安卓数据：二级确认（先确认意图，再确认不可撤销），清完刷新占用统计
+  // Restablecer datos de Android: doble confirmación (primero la intención, luego que es irreversible); al terminar se actualizan las estadísticas de uso
   $('btnResetData').addEventListener('click', async () => {
     const btn = $('btnResetData');
     btn.disabled = true;
@@ -1932,9 +1932,9 @@ function bindSettings() {
     }
   });
 
-  // 修复网络：安卓里联网页面一直黑屏（红果点「同意并继续」后整屏黑）时用。
-  // 根因是虚拟机 /data 里的 Wi-Fi 配置坏了，wlan0 没起来、没有默认路由。
-  // Play Store 镜像不允许 root，只能整体重置 /data；应用清单保留，点开时会自动重装。
+  // Reparar red: para cuando las páginas en línea de Android se quedan siempre en negro (por ejemplo, pantalla negra tras «aceptar y continuar»).
+  // La causa es que la configuración Wi-Fi en /data de la máquina virtual se dañó: wlan0 no arranca y no hay ruta por defecto.
+  // La imagen Play Store no permite root; solo se puede restablecer /data entero; la lista de apps se conserva y se reinstalan al abrirlas.
   $('btnRepairNetwork').addEventListener('click', async () => {
     const btn = $('btnRepairNetwork');
     btn.disabled = true;
@@ -1974,7 +1974,7 @@ function bindSettings() {
     }
   });
 
-  // 清理旧版本残留：扫描旧程序目录 / 失效卸载项 / 更新临时文件，确认后一次性清掉。
+  // Limpiar restos de versiones anteriores: analiza carpetas viejas / entradas de desinstalación obsoletas / temporales de actualización y los borra todos tras confirmar.
   $('btnLeftovers').addEventListener('click', async () => {
     const btn = $('btnLeftovers');
     btn.disabled = true;
@@ -2025,7 +2025,7 @@ function bindSettings() {
 
   $('btnOpenShared').addEventListener('click', () => api.openSharedDir());
 
-  // 重建快捷方式：桌面图标被误删 / 被安全软件拦掉时的兜底入口
+  // Recrear accesos directos: acceso de respaldo cuando se borraron los iconos del escritorio / los bloqueó un programa de seguridad
   $('btnRebuildShortcuts').addEventListener('click', async () => {
     const btn = $('btnRebuildShortcuts');
     btn.disabled = true;
@@ -2040,7 +2040,7 @@ function bindSettings() {
     }
   });
 
-  // 共享目录：先浏览选目录，再「保存并迁移」把旧文件一次性搬到新目录
+  // Carpeta compartida: primero se elige la carpeta y luego «Guardar y migrar» mueve los archivos viejos a la nueva de una vez
   $('btnBrowseShared').addEventListener('click', async () => {
     const picked = await api.openDir();
     if (!picked) return;
@@ -2062,7 +2062,7 @@ function bindSettings() {
     }
   });
 
-  // 一键卸载 LanzadorAPK 本体（取消 .apk 关联 + 启动卸载程序；便携版手动删除）
+  // Desinstalar LanzadorAPK con un clic (quita la asociación .apk + inicia el desinstalador; en la versión portátil se borra a mano)
   $('btnUninstall').addEventListener('click', async () => {
     const ok = window.confirm('¿Desinstalar Lanzador APK?\n\nSe quitará la asociación de archivos .apk y se eliminará el programa. Esta acción no se puede deshacer.');
     if (!ok) return;
@@ -2086,7 +2086,7 @@ function bindSettings() {
     toast({ title: 'Desinstalando…', body: 'Desinstalador iniciado; Lanzador APK se cerrará', type: 'ok', sticky: true });
   });
 
-  // ARM 兼容镜像下载（带进度 toast）
+  // Descarga de la imagen compatible con ARM (con toast de progreso)
   $('btnInstallPlay').addEventListener('click', async () => {
     const btn = $('btnInstallPlay');
     btn.disabled = true;
@@ -2116,7 +2116,7 @@ function bindSettings() {
     }
   });
 
-  // 兼容镜像状态显示
+  // Muestra el estado de la imagen compatible
   (async () => {
     const env = ((state.status = await api.runtimeStatus()).env) || {};
     const s = state.settings;
@@ -2142,7 +2142,7 @@ function bindSettings() {
     toast({ title: 'Carpeta de datos actualizada', body: 'Reinicia Lanzador APK para aplicar el cambio (los datos antiguos no se mueven solos)', type: 'ok', sticky: true });
   });
 
-  // 安卓数据目录（AVD + 快照）：真正吃盘的那块，单独指到别的盘
+  // Carpeta de datos de Android (AVD + instantáneas): lo que realmente llena el disco; se puede apuntar aparte a otro disco
   if ($('btnBrowseAvdDir')) {
     $('btnBrowseAvdDir').addEventListener('click', async () => {
       const picked = await api.openDir();
@@ -2195,10 +2195,10 @@ function bindSettings() {
   });
 }
 
-/* ---------------- 事件绑定 ---------------- */
+/* ---------------- Enlace de eventos ---------------- */
 
 function bindEvents() {
-  // 链接统一走系统浏览器
+  // Los enlaces siempre van al navegador del sistema
   document.addEventListener('click', (e) => {
     const a = e.target.closest && e.target.closest('a[href^="http"]');
     if (!a) return;
@@ -2207,7 +2207,7 @@ function bindEvents() {
   });
 
   $('btnSettings').addEventListener('click', openSettings);
-  // 状态标签也当入口：点「需要部署 / 引导中 / Android 14」直接进设置的运行时面板
+  // La etiqueta de estado también es un acceso: pulsar «Falta instalar / Arrancando / Android 14» abre el panel del runtime en la configuración
   $('engineTag').addEventListener('click', () => showSetup(true));
   $('btnCloseSettings').addEventListener('click', closeSettings);
   $('btnDoneSettings').addEventListener('click', closeSettings);
@@ -2215,7 +2215,7 @@ function bindEvents() {
     if (e.target === $('settingsMask')) closeSettings();
   });
 
-  // 运行时部署：入口已收进设置，这里只处理面板内的按钮
+  // Instalación del runtime: el acceso ya está en la configuración; aquí solo se manejan los botones del panel
   $('btnDeployAll').addEventListener('click', deployAll);
   $('btnMarkInstalled').addEventListener('click', markInstalled);
   $('btnGuideClose').addEventListener('click', () => { $('setupGuide').hidden = true; });
@@ -2227,7 +2227,7 @@ function bindEvents() {
     }
   });
 
-  // 状态条上的自检计数：点开就是设置里的运行时面板
+  // El contador de la comprobación en la barra de estado: al pulsarlo abre el panel del runtime en la configuración
   $('envChip').addEventListener('click', () => {
     openSettings().then(() => {
       const box = $('envCheck');
@@ -2280,7 +2280,7 @@ function bindEvents() {
   };
   $('btnInstall').addEventListener('click', pick);
   $('btnInstall2').addEventListener('click', pick);
-  // 共享目录入口移到设置里：同步 + 打开都在「文件互通」组内
+  // El acceso a la carpeta compartida pasó a la configuración: sincronizar + abrir están en el grupo «Compartir archivos»
   const btnSync = $('btnSyncShared');
   if (btnSync) btnSync.addEventListener('click', async () => {
     btnSync.disabled = true;
@@ -2302,8 +2302,8 @@ function bindEvents() {
   $('grid').addEventListener('click', (e) => {
     const card = e.target.closest('.card');
     if (!card) return;
-    // 「添加应用」卡片没有 data-pkg，走安装流程而不是启动。
-    // 直接转调工具栏那个「安装 APK」按钮，复用它的文件选择逻辑。
+    // La tarjeta «Agregar app» no tiene data-pkg: sigue el flujo de instalación, no el de inicio.
+    // Llama directamente al botón «Instalar APK» de la barra de herramientas, reutilizando su lógica de selección de archivos.
     if (card.classList.contains('card-add')) { $('btnInstall').click(); return; }
     if (card.dataset.pkg) launchApp(card.dataset.pkg);
   });
@@ -2340,7 +2340,7 @@ function bindEvents() {
     }
   });
 
-  // 拖放安装
+  // Instalación arrastrando y soltando
   let dragDepth = 0;
   window.addEventListener('dragenter', (e) => {
     e.preventDefault();
@@ -2365,9 +2365,9 @@ function bindEvents() {
     else toast({ title: 'Solo se pueden arrastrar archivos .apk', type: 'error' });
   });
 
-  // 主进程事件
+  // Eventos del proceso principal
   api.on('install:error', (p) => {
-    // 报错了就别再让「正在安装…」那条一直转圈（可能来自双击 APK 的另一条链路）
+    // Si hubo un error, «Instalando…» no debe seguir girando (puede venir de otra ruta, como el doble clic en un APK)
     if (installToast) { try { installToast.dismiss(); } catch (_) { /* ignore */ } installToast = null; }
     const name = p && p.file ? String(p.file).split(/[\\/]/).pop() : '';
     toast({
@@ -2378,7 +2378,7 @@ function bindEvents() {
   });
   api.on('toast', (p) => toast({ title: p.message, type: p.type === 'error' ? 'error' : 'info' }));
   api.on('app:launched', () => setTimeout(refreshApps, 800));
-  // 应用被关掉（托盘「关闭当前应用」、右键菜单、或窗口被关）后要刷新「运行中」标记
+  // Al cerrar una app («Cerrar la aplicación actual» de la bandeja, el menú contextual o cerrando la ventana) hay que actualizar la marca «En ejecución»
   api.on('apps:changed', () => setTimeout(refreshApps, 300));
   api.on('runtime:log', (m) => console.log('[runtime]', m));
   api.on('ui:navigate', (v) => {
@@ -2389,12 +2389,12 @@ function bindEvents() {
   api.on('update:state', (info) => {
     if (!info) return;
     renderUpdate(info);
-    // 启动 8 秒后才拿到更新信息：欢迎卡若还开着，把「发现新版本」这条补进去
+    // La información de actualización llega 8 s después de iniciar: si la tarjeta de bienvenida sigue abierta, se agrega «Nueva versión disponible»
     const wm = $('welcomeMask');
     if (wm && !wm.hidden) renderWelcomeTips();
   });
   api.on('update:progress', (p) => renderUpdateProgress(p));
-  // 自动检测：主进程定时跑完后把结果推过来，设置页开着就直接刷新面板
+  // Comprobación automática: cuando el proceso principal termina una ronda envía el resultado, y si la configuración está abierta se actualiza el panel directamente
   api.on('autodebug:state', (r) => {
     if (r && r.running) {
       const txt = $('autodebugStateText');
@@ -2405,7 +2405,7 @@ function bindEvents() {
   });
 }
 
-/* ---------------- 启动 ---------------- */
+/* ---------------- Inicio ---------------- */
 
 async function init() {
   bindEvents();
@@ -2426,7 +2426,7 @@ async function init() {
   setInterval(selfCheck, 60000);
 }
 
-/* ---------------- 启动欢迎卡 ---------------- */
+/* ---------------- Tarjeta de bienvenida ---------------- */
 
 let startupInfo = null;
 
@@ -2452,11 +2452,11 @@ function bindWelcome() {
   window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !mask.hidden) close(); });
 }
 
-/** 决定要不要弹：开机自启必弹；手动打开则每天最多一次，且用户可永久关闭 */
+/** Decide si se muestra: con inicio automático siempre; abierta a mano, como mucho una vez al día, y el usuario puede desactivarla para siempre */
 async function maybeShowWelcome() {
   const mask = $('welcomeMask');
   if (!mask) return;
-  // 冒烟截图时不要弹欢迎卡：否则每次自动截图都被它挡住主界面
+  // En las capturas de prueba no se muestra la tarjeta de bienvenida; si no, taparía la pantalla principal en cada captura automática
   try { if ((await api.startupInfo()).smoke) return; } catch (_) { /* ignore */ }
   try { startupInfo = await api.startupInfo(); } catch (_) { startupInfo = null; }
   const cfg = (state.settings && state.settings.welcome) || {};
@@ -2488,7 +2488,7 @@ async function maybeShowWelcome() {
   api.setSettings({ welcome: { lastDate: today } }).catch(() => {});
 }
 
-/** 提示区单独渲染：启动 8 秒后才拿到更新信息，那时卡片可能还开着，需要补一次 */
+/** La zona de consejos se renderiza aparte: la información de actualización llega 8 s después de iniciar, cuando la tarjeta puede seguir abierta, y hay que completarla */
 function renderWelcomeTips() {
   const box = $('welcomeTips');
   if (!box) return;
@@ -2508,29 +2508,29 @@ function renderWelcomeTips() {
     .join('');
 }
 
-/* ---------------- 环境自检 ---------------- */
+/* ---------------- Comprobación del entorno ---------------- */
 
 let envBusy = false;
 
-/** 拉取 doctor:selfCheck：把问题渲染到设置里的自检面板，并在状态条上留一个计数 */
+/** Obtiene doctor:selfCheck: muestra los problemas en el panel de comprobación de la configuración y deja un contador en la barra de estado */
 async function selfCheck() {
   if (envBusy) return;
   envBusy = true;
   try {
     const r = await api.selfCheck().catch(() => null);
     if (r) renderEnvCheck(r);
-  } catch (_) { /* 自检失败不阻断主流程 */ }
+  } catch (_) { /* Un fallo de la comprobación no bloquea el flujo principal */ }
   finally { envBusy = false; }
 }
 
 function renderEnvCheck(r) {
   const box = $('envCheck');
   if (!box) return;
-  // 「组件缺失」在同一个面板的一键完成里已经覆盖，不再重复列出
+  // «Componentes faltantes» ya lo cubre el «Completar con un clic» del mismo panel; no se lista otra vez
   const needDeploy = !!(state.status && state.status.needsSetup);
   const issues = (r.issues || []).filter((i) => !(needDeploy && i.fix === 'deploy'));
 
-  // 主界面不再放横幅：只在底部状态条上留一个可点的计数，点开就是设置里的自检面板
+  // La pantalla principal ya no tiene aviso grande: solo un contador pulsable en la barra de estado inferior, que abre el panel de comprobación de la configuración
   const chip = $('envChip');
   if (chip) {
     const errs = issues.filter((i) => i.severity === 'error').length;
@@ -2609,9 +2609,9 @@ async function fixIssue(issue) {
         t.update({ title: 'Aceleración por hardware activada', body: r.restartNeeded ? 'Reinicia el equipo para obtener el mejor rendimiento' : (r.note || ''), type: 'ok' });
         setTimeout(t.dismiss, 3200);
       } else if (r.manual) {
-        // 商店（MSIX）版：包固定 mediumIL，通常拿不到管理员授权。
-        // 与其让用户点一个注定失败的按钮，不如直接把「启用或关闭 Windows 功能」
-        // 对话框弹出来，并告诉他勾哪一项。
+        // Versión de la Store (MSIX): el paquete va fijo en mediumIL y normalmente no obtiene elevación.
+        // En vez de ofrecer un botón condenado a fallar, se abre directamente el diálogo «Activar o desactivar las características de Windows»
+        // y se le dice qué marcar.
         t.dismiss();
         await api.openWindowsFeatures?.().catch(() => null);
         toast({
@@ -2629,7 +2629,7 @@ async function fixIssue(issue) {
       break;
     }
     case 'disk': {
-      // 主进程会弹出原生确认框（含可释放空间预览），这里不再重复 confirm
+      // El proceso principal muestra un diálogo nativo de confirmación (con vista previa del espacio a liberar); aquí no se repite el confirm
       const r = await api.runtimeCleanup({ apply: true }).catch(() => null);
       if (!r) { toast({ title: 'Error al limpiar', body: 'Inténtalo de nuevo', type: 'error' }); break; }
       if (r.cancelled) break;
@@ -2651,9 +2651,9 @@ async function fixIssue(issue) {
       toast(r.ok ? { title: 'Archivos de bloqueo restantes eliminados', type: 'ok' } : { title: 'Error al limpiar', body: r.error, type: 'error' });
       break;
     }
-    // ---- 自动检测（自动 debug）新增的修复动作 ----
+    // ---- Acciones de reparación nuevas de la comprobación automática ----
     case 'restartRuntime': {
-      // unauthorized / 引导卡死 / 孤儿锁的首选自愈动作：停一次再拉起来（走冷启动）
+      // Acción de autocorrección preferida para unauthorized / arranque colgado / bloqueos huérfanos: detener y volver a lanzar (arranque en frío)
       const t = toast({ title: 'Reiniciando el runtime de Android…', body: 'Se iniciará de nuevo, tarda unos segundos', type: 'info', sticky: true, spinner: true });
       const r = await api.restartRuntime().catch(() => ({ ok: false }));
       if (r && r.ok) {
@@ -2679,7 +2679,7 @@ async function fixIssue(issue) {
       break;
     }
     case 'dataReset': {
-      // 扩容被差量盘挡住时必须重建：会清掉已装应用，所以只引导、不自动做。
+      // Si el disco diferencial bloquea la ampliación hay que recrear: se borran las apps instaladas, así que solo se guía, no se hace automáticamente.
       toast({
         title: 'Hay que recrear la partición de datos de Android',
         body: 'Ve a «Configuración → Rendimiento y recursos» y pulsa «Ampliar ahora»; si pide restablecer, confirma (se borran las apps instaladas).',
@@ -2690,7 +2690,7 @@ async function fixIssue(issue) {
       break;
     }
     case 'orientation': {
-      // 让物理面板方向跟上策略：策略要横屏就切横屏，要竖屏就切竖屏
+      // Que la orientación de la pantalla física siga a la estrategia: si pide horizontal se cambia a horizontal, si pide vertical a vertical
       const s = (state.settings && state.settings.display) || {};
       const mode = s.orientationMode || 'auto';
       if (mode === 'auto') {
@@ -2737,7 +2737,7 @@ async function fixIssue(issue) {
     default:
       toast({ title: 'Todavía no se puede reparar automáticamente', body: issue.hint || '', type: 'info' });
   }
-  // 修复后重新自检，刷新横幅与状态
+  // Tras reparar se vuelve a comprobar y se actualizan el aviso y el estado
   setTimeout(selfCheck, 600);
   setTimeout(refreshStatus, 600);
 }

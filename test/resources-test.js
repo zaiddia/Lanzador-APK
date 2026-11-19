@@ -1,12 +1,12 @@
 'use strict';
 /**
- * 资源分配（内存 / CPU / 存储）的纯 Node 测试：不需要 Electron、不需要模拟器。
+ * Pruebas en Node puro de la asignación de recursos (memoria / CPU / almacenamiento): sin Electron y sin emulador.
  *
- * 这一层的价值就是「填错也不出事」：用户随便填 32GB 内存、128GB 分区，
- * 保存前都要被收敛到宿主真的给得出的范围，否则表现是开机黑屏 / 装到一半失败，
- * 用户根本看不出是哪里错了。
+ * El valor de esta capa es que «aunque se llene mal no pasa nada»: si el usuario pone 32 GB de memoria o una partición de 128 GB,
+ * antes de guardar hay que ajustarlo a lo que el anfitrión realmente puede dar; si no, el síntoma es pantalla negra al arrancar / instalación fallida a medias,
+ * y el usuario no tiene forma de saber qué estuvo mal.
  *
- * 运行：node test/resources-test.js
+ * Ejecutar: node test/resources-test.js
  */
 const assert = require('assert/strict');
 const fs = require('fs');

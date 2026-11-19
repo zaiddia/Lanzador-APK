@@ -1,11 +1,11 @@
 'use strict';
 /**
- * 驱动（兼容补丁）扩展的纯 Node 测试：不需要 Electron、不需要模拟器、不需要联网。
+ * Pruebas en Node puro de la extensión de controladores (parches de compatibilidad): sin Electron, sin emulador y sin internet.
  *
- * 这里守的是「用户写的 JSON 再野，也只能改白名单里的参数，不能在本机执行代码、
- * 不能删数据」这条底线，外加匹配 / 叠加 / 导入导出的行为。
+ * Aquí se protege el límite de que «por raro que sea el JSON del usuario, solo puede cambiar parámetros de la lista permitida, no puede ejecutar código en el equipo
+ * ni borrar datos», además del comportamiento de coincidencia / combinación / importar y exportar.
  *
- * 运行：node test/drivers-test.js
+ * Ejecutar: node test/drivers-test.js
  */
 const assert = require('assert/strict');
 const fs = require('fs');

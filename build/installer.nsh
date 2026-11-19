@@ -1,33 +1,33 @@
-; LanzadorAPK 自定义 NSIS 脚本
-; 作用：卸载开始前，先结束可能仍在后台驻留的运行时进程，
-; 否则它们会锁住安装目录里的文件，导致卸载不干净、第三方粉碎工具也删不掉。
+; Script NSIS personalizado de LanzadorAPK
+; Función: antes de desinstalar, termina los procesos del runtime que puedan seguir en segundo plano;
+; si no, bloquean archivos de la carpeta de instalación y la desinstalación queda incompleta, ni siquiera las herramientas de borrado forzado pueden eliminarlos.
 ;
-; LanzadorAPK 退出后仍可能留下 detached 的 qemu（为了下次秒开），
-; 所以卸载环节必须自己兜底清一遍。
+; Al cerrar LanzadorAPK puede quedar un qemu independiente (para abrir más rápido la próxima vez),
+; así que el desinstalador tiene que limpiarlo por su cuenta.
 
-; 安装收尾：再兜一层桌面图标。
-; electron-builder 的 createDesktopShortcut 走的是它自己的 CreateShortcuts 流程，
-; 个别环境（桌面被 OneDrive 重定向、快捷方式被安全软件回滚）里会生成失败，
-; 用户装完发现桌面上什么都没有。这里用 NSIS 原生的 CreateShortcut 再写一次：
-; $DESKTOP 走 SHGetFolderPath，能正确跟随桌面的重定向路径；写成幂等操作，
-; 和 electron-builder 的重复执行也只是覆盖同一个 .lnk。
+; Al terminar la instalación: una capa extra para el icono del escritorio.
+; createDesktopShortcut de electron-builder usa su propio flujo CreateShortcuts y
+; en algunos entornos (escritorio redirigido a OneDrive, accesos revertidos por un programa de seguridad) falla,
+; y el usuario no encuentra nada en el escritorio. Aquí se vuelve a crear con CreateShortcut nativo de NSIS:
+; $DESKTOP usa SHGetFolderPath y sigue bien la redirección del escritorio; es idempotente,
+; y si electron-builder también lo crea, solo se sobrescribe el mismo .lnk.
 !macro customInstall
   DetailPrint "Creando el acceso directo en el escritorio…"
   CreateShortcut "$DESKTOP\LanzadorAPK.lnk" "$INSTDIR\LanzadorAPK.exe" "" "$INSTDIR\LanzadorAPK.exe" 0 \
-    SW_SHOWNORMAL "" "LanzadorAPK — 在电脑上直接运行安卓应用"
+    SW_SHOWNORMAL "" "Lanzador APK — Ejecuta apps Android en tu PC"
   CreateDirectory "$SMPROGRAMS\LanzadorAPK"
   CreateShortcut "$SMPROGRAMS\LanzadorAPK\LanzadorAPK.lnk" "$INSTDIR\LanzadorAPK.exe" "" "$INSTDIR\LanzadorAPK.exe" 0 \
-    SW_SHOWNORMAL "" "LanzadorAPK — 在电脑上直接运行安卓应用"
+    SW_SHOWNORMAL "" "Lanzador APK — Ejecuta apps Android en tu PC"
 !macroend
 
 !macro customUnInstall
-  ; 先删自己写的快捷方式入口（未安装 LanzadorAPK 时也应无残留）
+  ; Primero se borran los accesos directos que creamos (aunque LanzadorAPK no esté instalado no deben quedar restos)
   Delete "$DESKTOP\LanzadorAPK.lnk"
   Delete "$SMPROGRAMS\LanzadorAPK\LanzadorAPK.lnk"
   RMDir "$SMPROGRAMS\LanzadorAPK"
 
   DetailPrint "Cerrando procesos de LanzadorAPK que siguen abiertos…"
-  ; /F 强杀 /T 连带子进程。进程不存在时 taskkill 返回 128，忽略即可。
+  ; /F fuerza el cierre y /T incluye los procesos hijos. Si el proceso no existe taskkill devuelve 128; se ignora.
   nsExec::Exec 'taskkill.exe /F /T /IM LanzadorAPK.exe'
   nsExec::Exec 'taskkill.exe /F /T /IM qemu-system-x86_64.exe'
   nsExec::Exec 'taskkill.exe /F /T /IM qemu-system-i386.exe'
@@ -35,6 +35,6 @@
   nsExec::Exec 'taskkill.exe /F /T /IM emulator-check.exe'
   nsExec::Exec 'taskkill.exe /F /T /IM adb.exe'
   nsExec::Exec 'taskkill.exe /F /T /IM netsimd.exe'
-  ; 给一点时间让进程真正退出、释放文件句柄
+  ; Se da un momento para que el proceso salga de verdad y libere los identificadores de archivo
   Sleep 1500
 !macroend

@@ -1,8 +1,8 @@
 'use strict';
 /**
- * Electron 集成测试：验证 ICO 生成、快捷方式创建、真实图标落盘
- * 运行：electron test/electron-integration.js
- * 输出：test/out/result.json
+ * Prueba de integración de Electron: verifica la generación de ICO, la creación de accesos directos y que el icono real se guarde en disco
+ * Ejecutar: electron test/electron-integration.js
+ * Salida: test/out/result.json
  */
 const { app } = require('electron');
 const fs = require('fs');
@@ -23,17 +23,17 @@ app.whenReady().then(async () => {
     const { pngToIco, writeShortcut, removeShortcut, iconToIco } = require('../src/core/shortcut');
     const { parseApk } = require('../src/core/apk');
 
-    // 1. 程序图标 → PNG → ICO
+    // 1. Icono del programa → PNG → ICO
     const png = drawAppIcon(256);
     fs.writeFileSync(path.join(OUT, 'icon.png'), png);
     const ico = pngToIco(png);
     fs.writeFileSync(path.join(OUT, 'icon.ico'), ico);
     step('生成 ICO', !!ico && ico.length > 1000, `${ico ? ico.length : 0} bytes`);
 
-    // 1b. WebP 图标降级路径：nativeImage 解不了 WebP，必须能落到 decode 回调，
-    // 没有解码器时用品牌占位图并**如实回报**（安装时会把它变成一条软警告）。
+    // 1b. Ruta de respaldo para iconos WebP: nativeImage no decodifica WebP; debe llegar al callback decode,
+    // y sin decodificador usar el icono provisional de marca y **reportarlo con honestidad** (al instalar se convierte en una advertencia leve).
     {
-      // 1x1 的最小 WebP
+      // WebP mínimo de 1x1
       const webp = Buffer.from('UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA', 'base64');
       let noDecoder = '';
       const placeholderIco = await iconToIco(webp, { onFallback: (why) => { noDecoder = why; } });
@@ -46,12 +46,12 @@ app.whenReady().then(async () => {
         decode: async () => { decoded++; return png; },
         onFallback: (why) => { throw new Error(`不该降级：${why}`); },
       });
-      // nativeImage 若某天能直接解 WebP，decoded 会是 0，同样算通过；关键是产出合法 ICO
+      // Si algún día nativeImage decodifica WebP directamente, decoded será 0 y también pasa; lo clave es producir un ICO válido
       step('WebP 图标最终产出 ICO', !!viaDecode && viaDecode.readUInt16LE(2) === 1,
         `decode 调用 ${decoded} 次，${viaDecode ? viaDecode.length : 0} bytes`);
     }
 
-    // 2. 快捷方式
+    // 2. Accesos directos
     const lnk = path.join(OUT, 'test.lnk');
     writeShortcut({
       shortcutPath: lnk,
@@ -64,7 +64,7 @@ app.whenReady().then(async () => {
     removeShortcut(lnk);
     step('删除 .lnk', !fs.existsSync(lnk));
 
-    // 3. 真实 APK 图标 → ICO
+    // 3. Icono de APK real → ICO
     const fixture = process.env.LANZADORAPK_TEST_APK
       || (() => {
         try {

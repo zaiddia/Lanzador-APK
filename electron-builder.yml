@@ -6,7 +6,7 @@ directories:
   output: dist/release
   buildResources: build
 
-# 只带运行需要的文件，源码目录整块进包（无 asar：窗口代理要用真实的 .ps1 路径）
+# Solo los archivos necesarios para ejecutar; el código va completo (sin asar: el agente de ventanas necesita la ruta real del .ps1)
 asar: false
 files:
   - src/**/*
@@ -14,21 +14,21 @@ files:
   - LICENSE
   - "!**/*.map"
   - "!**/node_modules/**"
-  # 运行时解压 .xz 镜像用（NAPI 预编译，无 ABI 问题）
+  # Para descomprimir las imágenes .xz del runtime (NAPI precompilado, sin problemas de ABI)
   - "node_modules/@napi-rs/lzma/**"
   - "node_modules/@napi-rs/lzma-win32-x64-msvc/**"
   - "!node_modules/@napi-rs/lzma/*.md"
   - "!node_modules/@napi-rs/lzma/*.ts"
   - "!node_modules/@napi-rs/lzma/browser-entry.*"
 
-# 只保留中英文界面语言（Electron locales 从 41MB 降到 ~3MB）
+# Solo se conservan los idiomas de interfaz español e inglés (los locales de Electron pasan de 41 MB a ~3 MB)
 electronLanguages:
   - es
   - es-419
   - en-US
 
-# 完整运行时（emulator + platform-tools + 系统镜像），由 build/prepare-runtime.js 生成。
-# 打进包里之后首次启动不再需要任何下载。
+# Runtime completo (emulator + platform-tools + imagen del sistema), generado por build/prepare-runtime.js.
+# Una vez dentro del paquete, el primer arranque ya no descarga nada.
 extraResources:
   - from: build/runtime
     to: runtime
@@ -42,28 +42,28 @@ win:
       arch:
         - x64
   icon: src/ui/assets/appicon.ico
-  # 安装到当前用户目录，不写系统盘、不要求管理员权限
+  # Se instala en la carpeta del usuario actual, sin escribir en el disco del sistema ni pedir permisos de administrador
   requestedExecutionLevel: asInvoker
 
-# ---------------- 微软商店（MSIX） ----------------
-# appx 目标不在默认构建列表里：它只有出商店包时才用（npm run build:appx），
-# 平时 npm run build:exe 仍然只出 NSIS 安装包。
+# ---------------- Microsoft Store (MSIX) ----------------
+# El destino appx no está en la lista de compilación por defecto: solo se usa para el paquete de la Store (npm run build:appx);
+# normalmente npm run build:exe solo genera el instalador NSIS.
 #
-# identityName / publisher 必须逐字等于 Partner Center →
-#   Product management → Product identity 里的
-#   Package/Identity/Name 与 Package/Identity/Publisher。
-# 下面这两个值是 2026-11-16 从 Partner Center 抄下来的确认值；
-# 换产品身份时改这里（或设 LANZADORAPK_MSIX_IDENTITY / LANZADORAPK_MSIX_PUBLISHER）。
-# 注意：占位 Publisher（CN=zaiddia）打出来的包商店会直接拒收。
+# identityName / publisher deben ser exactamente iguales a los de Partner Center →
+#   Product management → Product identity:
+#   Package/Identity/Name y Package/Identity/Publisher.
+# Pon aquí los valores de tu propia cuenta de Partner Center;
+# para cambiar la identidad del producto edítalos aquí (o usa LANZADORAPK_MSIX_IDENTITY / LANZADORAPK_MSIX_PUBLISHER).
+# Atención: con un Publisher de marcador, la Store rechaza el paquete.
 appx:
   identityName: zaiddia.LanzadorAPK
   publisher: "CN=PON-AQUI-TU-PUBLISHER-DE-PARTNER-CENTER"  # Partner Center → Product identity
   publisherDisplayName: zaiddia
   displayName: LanzadorAPK
   applicationId: LanzadorAPK
-  # 全信任桌面应用唯一必需的能力。不要加 unvirtualizedResources /
-  # broadFileSystemAccess —— Store 基本不批，而且本应用靠「数据目录挪到
-  # %USERPROFILE%\LanzadorAPK」绕开了 AppData 写重定向，不需要它们。
+  # La única capacidad imprescindible para una app de escritorio de confianza total. No agregar unvirtualizedResources /
+  # broadFileSystemAccess: la Store casi nunca los aprueba, y esta app evita la redirección de escritura de AppData
+  # moviendo la carpeta de datos a %USERPROFILE%\LanzadorAPK, así que no los necesita.
   capabilities:
     - runFullTrust
   languages:
@@ -73,8 +73,8 @@ appx:
   maxVersionTested: 10.0.22621.0
 
 nsis:
-  # 不再是「一键装到 C 盘默认目录」：改为标准向导，允许用户选择安装位置
-  # （装到非系统盘可减轻 C 盘压力；运行时数据目录另在设置里单独指定）。
+  # Ya no es «instalación con un clic en la carpeta por defecto del disco C»: asistente estándar que permite elegir la ubicación
+  # (instalar en otro disco alivia el disco C; la carpeta de datos del runtime se elige aparte en Configuración).
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
@@ -82,30 +82,30 @@ nsis:
   installerLanguages:
     - es_ES
   language: "3082"
-  # always：即使桌面上已有同名 .lnk 也重建一次。
-  # 默认的 true 只在「不存在」时才创建，某些机器上（安全软件拦截、桌面被
-  # OneDrive 重定向、旧版残留了指向已删目录的坏快捷方式）会出现装完没图标，
-  # 或者图标还指着旧 exe。always 保证每次安装后都指向当前安装目录。
+  # always: recrea el .lnk aunque ya exista uno con el mismo nombre en el escritorio.
+  # el valor por defecto true solo lo crea si «no existe»; en algunos equipos (bloqueo de un programa de seguridad, escritorio
+  # redirigido a OneDrive, accesos antiguos rotos que apuntan a carpetas borradas) quedaba sin icono tras instalar,
+  # o el icono seguía apuntando al exe viejo. always garantiza que tras cada instalación apunte a la carpeta actual.
   createDesktopShortcut: always
   createStartMenuShortcut: true
   artifactName: LanzadorAPK-${version}-Setup.exe
-  # 卸载前先结束仍在运行的运行时进程，避免文件被锁导致无法删除
-  # （火绒等粉碎工具删不掉，多半是 qemu/adb 进程还驻留）。
+  # Antes de desinstalar se terminan los procesos del runtime en ejecución, para que los archivos no queden bloqueados
+  # (si una herramienta de borrado forzado no puede borrarlos, casi siempre es porque qemu/adb siguen activos).
   include: build/installer.nsh
-  # 安装包本身已含完整运行时（emulator + 系统镜像 .gz），装完首次启动
-  # 自动把镜像展开到用户目录，之后不再联网下载任何东西。
+  # El instalador ya trae el runtime completo (emulator + imagen del sistema .gz); en el primer arranque tras instalar
+  # descomprime la imagen en la carpeta del usuario y después ya no descarga nada.
 
-# 压缩级别：normal（zlib）。镜像本身已是 xz/gz，NSIS 这层只压 Electron 的 dll，
-# normal 与 maximum 体积差别很小，但 maximum(LZMA) 会让打安装包慢十几分钟。
-# 注：CI 用 PowerShell 跑 npx 时，行内 -c.compression=xxx 会被拆参、被当成配置文件路径，
-# 因此压缩级别统一在这里设置，不在 workflow 里用 -c 行内覆盖。
+# Nivel de compresión: normal (zlib). Las imágenes ya vienen en xz/gz; NSIS solo comprime las dll de Electron,
+# normal y maximum dan casi el mismo tamaño, pero maximum (LZMA) hace el instalador más de diez minutos más lento.
+# Nota: cuando el CI ejecuta npx con PowerShell, -c.compression=xxx en línea se parte y se toma como ruta de archivo de configuración,
+# por eso el nivel de compresión se fija aquí y no con -c en el workflow.
 compression: normal
 
 # ---------------- Linux / FydeOS ----------------
-# 这一段原来写在 package.json 的 "build" 字段里。electron-builder 26 的 schema
-# 已经不再接受 linux.desktop 那个形状，导致任何一次构建（包括 Windows）都在
-# 配置校验阶段直接失败。统一搬到这个文件、用 --config electron-builder.yml
-# 显式指定，就不会再被 package.json 里的旧配置抢走。
+# Esta sección antes estaba en el campo "build" de package.json. El esquema de electron-builder 26
+# ya no acepta la forma de linux.desktop, y cualquier compilación (incluida Windows) fallaba
+# en la validación de la configuración. Al moverla a este archivo e indicarlo con --config electron-builder.yml,
+# la configuración vieja de package.json ya no se impone.
 linux:
   target:
     - AppImage

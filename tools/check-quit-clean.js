@@ -1,12 +1,12 @@
 'use strict';
 /**
- * 端到端验证「打开软件只看到软件界面」：
- *   1) 用沙盒 APPDATA 起一个真实 LanzadorAPK（--smoke 会在 6.5 秒后自己正常退出）；
- *   2) 沙盒里放一条假应用记录，触发「打开即预热」——模拟器会在后台冷启动；
- *   3) 全程用窗口代理盯可见窗口：模拟器主窗 / qemu 控制台 / netsim 控制台都不许出现；
- *   4) 应用退出后再盯 8 秒：确认不会在桌面上「遗留」一个 Android Emulator 黑窗。
+ * Verificación de extremo a extremo de que «al abrir el programa solo se ve su interfaz»:
+ *   1) se inicia un LanzadorAPK real con APPDATA aislado (--smoke sale solo normalmente a los 6,5 s);
+ *   2) se pone un registro de app falso en el entorno aislado para activar el «precalentamiento al abrir»: el emulador arranca en frío en segundo plano;
+ *   3) se vigilan todo el tiempo las ventanas visibles con el agente: no puede aparecer la principal del emulador / la consola de qemu / la de netsim;
+ *   4) tras salir se vigila 8 s más: para confirmar que no «queda» una ventana negra de Android Emulator en el escritorio.
  *
- * 用法: node tools/check-quit-clean.js
+ * Uso: node tools/check-quit-clean.js
  */
 const fs = require('fs');
 const path = require('path');
@@ -14,8 +14,8 @@ const { spawn } = require('child_process');
 const { WinAgent } = require('../src/core/agent');
 
 const ROOT = path.join(__dirname, '..');
-// 运行时与安卓数据目录都可能被用户改到别的盘，测试时用环境变量指过去，
-// 免得每次都重新下载 1.4GB 运行时、或另建一个空 AVD。
+// El runtime y la carpeta de datos de Android pueden estar en otro disco; en las pruebas se apuntan con variables de entorno,
+// para no volver a descargar cada vez 1,4 GB de runtime ni crear otro AVD vacío.
 const ENGINE = path.resolve(process.env.LANZADORAPK_RUNTIME || path.join(ROOT, 'engine'));
 const AVD_DIR = process.env.LANZADORAPK_AVD_HOME || '';
 const ELECTRON = path.join(ROOT, 'node_modules', 'electron', 'dist', 'electron.exe');
@@ -46,8 +46,8 @@ const bad = (w) => {
   await agent.scope([ENGINE]);
   console.log('agent ready, port=', agent.port);
 
-  // 这个环境里全局设了 ELECTRON_RUN_AS_NODE=1（Electron 会退化成纯 Node），
-  // 必须整个删掉；置空字符串仍然算「已设置」，会起不来。
+  // En este entorno está puesto globalmente ELECTRON_RUN_AS_NODE=1 (Electron se comporta como Node puro);
+  // hay que eliminarlo por completo: una cadena vacía sigue contando como «definido» y no arranca.
   const env = { ...process.env, APPDATA: sandbox };
   delete env.ELECTRON_RUN_AS_NODE;
 
@@ -87,7 +87,7 @@ const bad = (w) => {
 
   try { proc.kill(); } catch (_) { /* ignore */ }
   agent.dispose();
-  // 沙盒里的 AVD 有好几个 GB，测完顺手清掉（模拟器还占着文件时会失败，忽略即可）
+  // El AVD del entorno aislado ocupa varios GB; se borra al terminar (falla si el emulador aún usa los archivos; se ignora)
   try { fs.rmSync(sandbox, { recursive: true, force: true, maxRetries: 3 }); } catch (_) { /* ignore */ }
   process.exit(ok ? 0 : 1);
 })().catch((e) => { console.error('FATAL', e); process.exit(1); });

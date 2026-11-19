@@ -1,5 +1,5 @@
 'use strict';
-/* 兼容模式端到端验证：走产品代码路径 boot（API 34 Play 镜像）→ abilist → 装 ARM APK → 启动 */
+/* Verificación de extremo a extremo del modo compatible: ruta real del producto boot (imagen Play API 34) → abilist → instalar APK ARM → iniciar */
 process.env.ANDROID_ADB_SERVER_PORT = process.env.ANDROID_ADB_SERVER_PORT || '5038';
 const fs = require('fs');
 const path = require('path');

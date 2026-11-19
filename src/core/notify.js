@@ -1,19 +1,19 @@
 'use strict';
 /**
- * 安卓通知 → Windows 原生通知。
+ * Notificaciones de Android → notificaciones nativas de Windows.
  *
- * 模拟器没有把通知接到 Windows 上，这里按 2.5 秒轮询 `dumpsys notification`（只读、低开销），
- * 解析出「新出现的通知」再用 Electron 的 Notification 走系统通知中心 / 操作中心。
- * 点通知直接回到对应的应用窗口。
+ * El emulador no lleva las notificaciones a Windows; aquí se consulta `dumpsys notification` cada 2,5 s (solo lectura, bajo costo),
+ * se detectan «las notificaciones nuevas» y se envían con Notification de Electron al centro de notificaciones del sistema.
+ * Al pulsar la notificación se vuelve a la ventana de la app correspondiente.
  */
 const { Notification, nativeImage } = require('electron');
 
 const POLL_MS = 2500;
 
 /**
- * 系统自带的常驻通知不要往 Windows 上搬。
- * 「已检测到虚拟 SD 卡」「配置物理键盘」「Google Play 保护机制已开启」这类东西
- * 每天都会冒一遍，转成 Windows 通知就是纯骚扰。
+ * Las notificaciones fijas del propio sistema no se pasan a Windows.
+ * «Tarjeta SD virtual detectada», «Configurar teclado físico», «Google Play Protect activado» y similares
+ * aparecen todos los días; convertirlas en notificaciones de Windows sería puro acoso.
  */
 const SYSTEM_PKGS = [
   'android',
@@ -97,7 +97,7 @@ class NotifyBridge {
       const dump = await client.shell('dumpsys notification --noredact', { timeout: 12000 });
       const list = parseRecords(dump);
       if (!this.primed) {
-        // 第一次只做基线，避免启动瞬间把历史通知全弹一遍
+        // La primera vez solo se toma la línea base, para no mostrar todas las notificaciones viejas al iniciar
         for (const n of list) this.seen.add(`${n.pkg}|${n.key}|${n.title}`);
         this.primed = true;
         return;
@@ -109,10 +109,10 @@ class NotifyBridge {
         this.seen.add(id);
         fresh.push(n);
       }
-      // 防内存增长：只在最近 500 条里做去重
+      // Para que la memoria no crezca: la deduplicación solo usa las últimas 500
       if (this.seen.size > 500) this.seen = new Set([...this.seen].slice(-300));
       for (const n of fresh) this._show(n);
-    } catch (_) { /* 运行时未就绪时忽略 */ }
+    } catch (_) { /* Se ignora si el runtime no está listo */ }
   }
 
   _show(n) {
@@ -129,7 +129,7 @@ class NotifyBridge {
       });
       note.on('click', () => { if (this.onOpen) this.onOpen(n.pkg); });
       note.show();
-    } catch (_) { /* 通知失败不影响应用 */ }
+    } catch (_) { /* Un fallo de notificación no afecta la app */ }
   }
 }
 

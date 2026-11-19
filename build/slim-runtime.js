@@ -1,42 +1,42 @@
 'use strict';
 /**
- * 运行时瘦身：删掉模拟器里「我们的启动方式永远不会加载」的文件。
+ * Reducción del runtime: borra archivos del emulador que «nuestra forma de arrancar nunca carga».
  *
- * 判断依据是 emulator.js 的固定启动参数：
- *   - 只带 x86_64 镜像（API30 AOSP）      → qemu-system-aarch64.exe 用不上
- *   - -gpu software（swiftshader 软渲染） → vulkan / gles_angle 后端用不上
- *   - 界面只保留 38px 标题栏               → 模拟器自带界面的多语言、WebEngine 面板用不上
+ * Se basa en los parámetros de arranque fijos de emulator.js:
+ *   - solo imagen x86_64 (API30 AOSP)      → qemu-system-aarch64.exe no se usa
+ *   - -gpu software (renderizado swiftshader) → los backends vulkan / gles_angle no se usan
+ *   - la interfaz solo conserva una barra de título de 38 px → los idiomas de la interfaz del emulador y el panel WebEngine no se usan
  *
- * 网络相关的 netsimd / netsim / nimble_bridge 一定保留：
- * 它们负责 wifi / 蓝牙的数据通路，删了应用就上不了网，属于「能跑」的底线。
+ * netsimd / netsim / nimble_bridge, que tienen que ver con la red, siempre se conservan:
+ * llevan los datos de wifi / bluetooth; sin ellos las apps no tienen internet, es el mínimo para que funcione.
  *
- * 用法：
- *   node build/slim-runtime.js build/runtime          # 安全档（默认）
- *   node build/slim-runtime.js build/runtime --aggressive   # 再删 QtWebEngine（-169MB）
+ * Uso:
+ *   node build/slim-runtime.js build/runtime          # nivel seguro (por defecto)
+ *   node build/slim-runtime.js build/runtime --aggressive   # borra además QtWebEngine (-169 MB)
  *   node build/slim-runtime.js build/runtime --dry-run
  */
 const fs = require('fs');
 const path = require('path');
 
 /**
- * 安全档：删掉确实不会被加载的东西（约 -190MB）。
- * 实测单点回滚确认的边界（重要，别乱加）：
- *   - Qt6WebEngineCoreAndroidEmu.dll 是 emulator.exe 的硬依赖（静态导入），删了直接起不来 → 保留
- *   - lib64/gles_angle 提供 vk_swiftshader，swiftshader 软渲染依赖它 → 保留
- *   - lib64/vulkan 删掉只是退回软渲染（已实测能正常引导 + 渲染），但留着也不大 → 删掉省 103MB
+ * Nivel seguro: borra lo que de verdad nunca se carga (unos -190 MB).
+ * Límites confirmados probando cada borrado por separado (importante, no agregar a la ligera):
+ *   - Qt6WebEngineCoreAndroidEmu.dll es dependencia directa de emulator.exe (importación estática); sin ella no arranca → se conserva
+ *   - lib64/gles_angle aporta vk_swiftshader, del que depende el renderizado swiftshader → se conserva
+ *   - borrar lib64/vulkan solo vuelve al renderizado por software (probado: arranca y renderiza bien), aunque tampoco pesa mucho → se borra, ahorra 103 MB
  */
 const SAFE = [
   ['emulator/qemu/windows-x86_64/qemu-system-aarch64.exe', 'arm64 的 QEMU 二进制（只发 x86_64 镜像）'],
-  // 注意：不能整目录删 emulator/lib64/vulkan —— vulkan-1.dll 是 -gpu host 的加载器，
-  // 删了 host 会直接失败、只剩软件渲染（实测 AMD 780M 上必须保留）。只删大件：
+  // Atención: no se puede borrar la carpeta emulator/lib64/vulkan entera: vulkan-1.dll es el cargador de -gpu host;
+  // sin él host falla y solo queda el renderizado por software (probado: en AMD 780M es imprescindible). Solo se borran los archivos grandes:
   ['emulator/lib64/vulkan/layers', 'Vulkan 校验层（host 渲染用不到，-20MB）'],
   ['emulator/lib64/vulkan/glslangValidator.exe', '着色器校验工具（运行时用不到，-7MB）'],
   ['emulator/lib64/vulkan/libvulkan_lvp.dll', 'lavapipe 软件 Vulkan 后备（有系统显卡驱动时用不到，-53MB）'],
   ['emulator/lib64/vulkan/lvp_icd.json', 'lavapipe 的 ICD 描述（-1KB）'],
   ['emulator/lib64/vulkan/vk_swiftshader.dll', 'SwiftShader Vulkan（gles_angle 目录里有同款副本，-23MB）'],
   ['emulator/lib64/qt/translations', '模拟器界面的多语言包（只剩 38px 标题栏）'],
-  // 注意：不能删 emulator-check.exe —— emulator -accel-check 靠它检测 AEHD/WHPX，
-  // 缺了会判定"无硬件加速"退回 TCG 软件模拟（实测开机从 42s 变成 10 分钟+）。
+  // Atención: no se puede borrar emulator-check.exe: emulator -accel-check lo usa para detectar AEHD/WHPX;
+  // sin él se considera «sin aceleración por hardware» y se vuelve a la emulación TCG (probado: el arranque pasa de 42 s a más de 10 minutos).
   ['emulator/qsn.exe', 'QEMU 快照通知助手（emulator.exe 无任何引用，已 strings 实证，-34MB）'],
   ['emulator/resources/Toren1BD_Main.png', 'VR 全景环境贴图（红果用不到，-3.7MB）'],
   ['emulator/resources/Toren1BD_Decor.png', 'VR 全景装饰贴图（-3.5MB）'],
@@ -45,7 +45,7 @@ const SAFE = [
   ['emulator/resources/default360.mp4', '360° 全景默认视频（-2.4MB）'],
 ];
 
-/** 激进档目前为空：WebEngine 是硬依赖、gles_angle 是软渲染依赖，都不敢删 */
+/** El nivel agresivo está vacío por ahora: WebEngine es dependencia directa y gles_angle lo necesita el renderizado por software; no se pueden borrar */
 const AGGRESSIVE = [];
 
 function sizeOf(p) {
@@ -54,7 +54,7 @@ function sizeOf(p) {
     const st = fs.statSync(p);
     if (!st.isDirectory()) return st.size;
     for (const e of fs.readdirSync(p, { withFileTypes: true })) s += sizeOf(path.join(p, e.name));
-  } catch (_) { /* 忽略 */ }
+  } catch (_) { /* Se ignora */ }
   return s;
 }
 

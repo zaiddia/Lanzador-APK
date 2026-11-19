@@ -1,12 +1,12 @@
 'use strict';
 /**
- * 更新链路自检（不需要真的发布新版本、也不会动到当前安装）。
+ * Autocomprobación de la cadena de actualización (no hace falta publicar una versión nueva ni toca la instalación actual).
  *
- * 1) 能不能读到 GitHub 最新 release，并对当前形态挑到正确的资产；
- * 2) 版本比较逻辑；
- * 3) 「解压 + 覆盖 + 重启」脚本是真的能跑：造一个假安装目录，让脚本去覆盖它。
+ * 1) si se puede leer el último release de GitHub y elegir el recurso correcto para la forma actual;
+ * 2) la lógica de comparación de versiones;
+ * 3) que el script de «descomprimir + sobrescribir + reiniciar» de verdad funcione: se crea una carpeta de instalación falsa y el script la sobrescribe.
  *
- * 用法: node tools/check-update.js
+ * Uso: node tools/check-update.js
  */
 const fs = require('fs');
 const os = require('os');
@@ -21,7 +21,7 @@ const ok = (c, m) => console.log(`${c ? '✓' : '✗'} ${m}`);
   let pass = true;
   const check = (c, m) => { ok(c, m); if (!c) pass = false; };
 
-  // ---- 1. 版本比较 ----
+  // ---- 1. Comparación de versiones ----
   check(cmpVer('v0.3.2', '0.3.1') === 1, 'v0.3.2 > 0.3.1');
   check(cmpVer('0.3.1', 'v0.3.1') === 0, 'v 前缀不影响相等');
   check(cmpVer('v0.10.0', '0.9.9') === 1, '0.10.0 > 0.9.9（按数字比，不是字符串）');
@@ -48,7 +48,7 @@ const ok = (c, m) => console.log(`${c ? '✓' : '✗'} ${m}`);
     check(false, `GitHub 检查失败：${e.message}`);
   }
 
-  // 安装形态（有卸载器）应当挑 Setup.exe
+  // La forma instalada (con desinstalador) debe elegir Setup.exe
   fs.writeFileSync(path.join(install, 'Uninstall LanzadorAPK.exe'), 'stub');
   const u2 = new Updater({
     currentVersion: '0.0.0',
@@ -58,14 +58,14 @@ const ok = (c, m) => console.log(`${c ? '✓' : '✗'} ${m}`);
   });
   check(u2.flavor === 'setup', '识别为安装版（存在 Uninstall LanzadorAPK.exe）');
 
-  // ---- 3. 覆盖脚本真的能跑 ----
+  // ---- 3. El script de sobrescritura de verdad funciona ----
   const payload = path.join(sandbox, 'payload');
   fs.mkdirSync(path.join(payload, 'resources', 'app'), { recursive: true });
   fs.writeFileSync(path.join(payload, 'LanzadorAPK.exe'), 'new-exe');
   fs.writeFileSync(path.join(payload, 'resources', 'app', 'main.js'), 'new-main');
   fs.writeFileSync(path.join(install, 'LanzadorAPK.exe'), 'old-exe');
 
-  // 用一个立刻会退出的进程当「被等待的旧进程」
+  // Se usa un proceso que sale de inmediato como el «proceso viejo al que se espera»
   const decoy = spawn(process.execPath, ['-e', 'setTimeout(()=>{},1500)'], { stdio: 'ignore' });
 
   const script = u.apply(
@@ -75,7 +75,7 @@ const ok = (c, m) => console.log(`${c ? '✓' : '✗'} ${m}`);
   check(/Copy-Item/.test(script) && /Wait-Process/.test(script), '脚本包含等待进程与覆盖动作');
 
   const ps = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-  // 不真去 Start-Process 拉起 LanzadorAPK.exe（那是个假 exe），只验证复制
+  // No se hace Start-Process de LanzadorAPK.exe (es un exe falso); solo se verifica la copia
   const body = script.replace(/if \(Test-Path[^\r\n]*relaunched' \}/, "'skipped relaunch'");
   const b64 = Buffer.from(body, 'utf16le').toString('base64');
   try {
@@ -91,7 +91,7 @@ const ok = (c, m) => console.log(`${c ? '✓' : '✗'} ${m}`);
   check(newExe === 'new-exe', '安装目录里的 LanzadorAPK.exe 已被替换');
   check(newMain === 'new-main', '子目录里的文件也替换成功');
 
-  // ---- 4. apply() 真的起一个进程去替换（异步链路，不走网络）----
+  // ---- 4. apply() de verdad lanza un proceso que reemplaza (cadena asíncrona, sin red) ----
   const install2 = path.join(sandbox, 'install2');
   const payload2 = path.join(sandbox, 'payload2');
   fs.mkdirSync(install2, { recursive: true });
@@ -114,7 +114,7 @@ const ok = (c, m) => console.log(`${c ? '✓' : '✗'} ${m}`);
     await sleep(500);
     try {
       if (fs.readFileSync(path.join(install2, 'marker.txt'), 'utf8') === 'new') { asyncOk = true; break; }
-    } catch (_) { /* 还在替换 */ }
+    } catch (_) { /* Aún reemplazando */ }
   }
   check(asyncOk, 'apply() 在后台进程里完成了替换（异步链路可用）');
 

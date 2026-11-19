@@ -1,12 +1,12 @@
 'use strict';
 /**
- * 本机体检 / 自动配置的纯逻辑测试：不需要 Electron、不需要模拟器、不真的改系统。
+ * Pruebas de lógica pura de la revisión del equipo / configuración automática: sin Electron, sin emulador y sin cambiar el sistema de verdad.
  *
- * 守两件事：
- *   1. 结论必须和人话一致（BIOS 没开就说 BIOS，商店版不能自己提权就只给入口）；
- *   2. 自动配置只写「安全」的设置项，生成的驱动必须能过驱动校验。
+ * Protegen dos cosas:
+ *   1. la conclusión debe coincidir con lo que se le dice al usuario (si la BIOS no está activada se dice BIOS; la versión de la Store no puede elevarse y solo da el acceso);
+ *   2. la configuración automática solo escribe ajustes «seguros» y los controladores generados deben pasar la validación.
  *
- * 运行：node test/preflight-test.js
+ * Ejecutar: node test/preflight-test.js
  */
 const assert = require('assert/strict');
 const path = require('path');

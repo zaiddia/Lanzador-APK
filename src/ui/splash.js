@@ -1,24 +1,24 @@
 'use strict';
-/* LanzadorAPK 开机动画脚本：接收主进程的进度更新，控制淡出 */
+/* Script de la animación de arranque de LanzadorAPK: recibe las actualizaciones de progreso del proceso principal y controla el desvanecido */
 
 const api = window.lanzadorapkSplash;
-if (!api) { /* preload 未注入时静默退出 */ }
+if (!api) { /* Si preload no se inyectó, sale en silencio */ }
 
 const $ = (id) => document.getElementById(id);
 
-// 版本号
+// Número de versión
 api?.version?.().then((v) => { if ($('ver')) $('ver').textContent = v || ''; }).catch(() => {});
 
-// 首次安装标记 + 组件是否随包自带
+// Marca de primera instalación + si los componentes vienen en el paquete
 Promise.all([
   api?.isFirstRun?.().catch(() => false),
   api?.bundled?.().catch(() => false),
 ]).then(([first, bundled]) => {
   if (!first || !$('firstRun')) return;
   $('firstRun').hidden = false;
-  // 内置运行时（完整版安装包 / 微软商店 MSIX 版）：一个字都不该提「下载」。
-  // 用户抱怨的就是「装了 850MB 还在下镜像」，实际那只是把包里的压缩镜像
-  // 展开到用户目录，不需要联网。
+  // Runtime incluido (instalador completo / MSIX de Microsoft Store): no debe mencionar «descargar» en absoluto.
+  // La queja de los usuarios era justamente «instalé 850 MB y sigue descargando la imagen», cuando en realidad solo se descomprime la imagen del paquete
+  // en la carpeta del usuario, sin internet.
   if (bundled) {
     if ($('firstRunTitle')) $('firstRunTitle').textContent = 'Primer arranque · preparando localmente (no necesita internet)';
     if ($('firstRunList')) {
@@ -32,7 +32,7 @@ Promise.all([
   }
 }).catch(() => {});
 
-// 进度更新
+// Actualización de progreso
 api?.onProgress?.((p) => {
   if (!p) return;
   if (p.percent != null && $('progressBar')) {
@@ -43,7 +43,7 @@ api?.onProgress?.((p) => {
   }
 });
 
-// 完成 → 淡出
+// Completado → desvanecer
 api?.onDone?.(() => {
   const splash = $('splash');
   if (splash) {

@@ -1,25 +1,25 @@
 'use strict';
 /**
- * 窗口验证：按主进程的方式拉起 emulator，确认「桌面上一个多余窗口都不出现」。
+ * Verificación de ventanas: lanza emulator igual que el proceso principal y confirma que «no aparece ni una ventana de más en el escritorio».
  *
- * 要盯的是两类窗口：
- *   1. "Android Emulator - lanzadorapk5554"（QWindowIcon，模拟器主窗）
- *      —— 正常应该只在 embed 之后作为我们窗口的子窗口出现，桌面上永远看不到；
- *   2. 控制台黑窗（conhost 的 ConsoleWindowClass / CASCADIA_HOSTING_WINDOW_CLASS）
- *      —— qemu、netsimd 各会弹一个，标题是被启动的 exe 路径。
+ * Se vigilan dos tipos de ventanas:
+ *   1. "Android Emulator - lanzadorapk5554" (QWindowIcon, la ventana principal del emulador)
+ *      — normalmente solo aparece tras la incrustación, como hija de nuestra ventana; nunca se ve en el escritorio;
+ *   2. ventanas negras de consola (ConsoleWindowClass / CASCADIA_HOSTING_WINDOW_CLASS de conhost)
+ *      — qemu y netsimd abren una cada uno, con la ruta del exe lanzado como título.
  *
- * 用法: node tools/check-windows.js [runtimeRoot]
- *   runtimeRoot 默认取仓库里的 engine/（本地下载的运行时），也可以传安装目录的
- *   resources/runtime。
+ * Uso: node tools/check-windows.js [runtimeRoot]
+ *   runtimeRoot por defecto es engine/ del repositorio (el runtime descargado localmente); también se puede pasar el
+ *   resources/runtime de la carpeta de instalación.
  */
 const path = require('path');
 const { spawn } = require('child_process');
 const { WinAgent } = require('../src/core/agent');
 
-// 运行时目录：命令行参数 > 环境变量 > 仓库里的 engine/
+// Carpeta del runtime: argumento de línea de comandos > variable de entorno > engine/ del repositorio
 const ROOT = path.resolve(process.argv[2] || process.env.LANZADORAPK_RUNTIME || path.join(__dirname, '..', 'engine'));
 const EMU = path.join(ROOT, 'emulator', 'emulator.exe');
-// AVD 可能在别的盘（设置里 runtime.avdDir），线上用户常见；这里也支持显式指定
+// El AVD puede estar en otro disco (runtime.avdDir en la configuración), algo común entre usuarios; aquí también se puede indicar explícitamente
 const AVD_HOME = process.env.LANZADORAPK_AVD_HOME
   || path.join(process.env.APPDATA || '', 'lanzadorapk', 'avd');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -42,7 +42,7 @@ const bad = (w) => {
     return (r && r.list) || [];
   };
 
-  // 代理只碰「运行时目录里的进程」建的窗口：先声明范围，否则它什么都不藏
+  // El agente solo toca ventanas creadas por «procesos de la carpeta del runtime»: primero se declara el alcance; si no, no oculta nada
   await agent.scope([ROOT]);
   await agent.bootHide();
   console.log('常驻压制已开启');
@@ -84,7 +84,7 @@ const bad = (w) => {
   console.log('结束时仍在桌面上的异常窗口:', JSON.stringify(left));
 
   const okProbe = !!(probe && Number(probe.emu) !== 0);
-  // 允许「出现过但 400ms 内被压掉」的情况，最终必须为 0
+  // Se permite que «apareciera pero se suprimiera en menos de 400 ms»; al final debe ser 0
   const ok = left.length === 0 && okProbe;
   console.log('');
   console.log(`结果：${ok ? '通过' : '失败'}（过程中可见异常窗口累计 ${leaked} 次，结束时 ${left.length} 个）`);

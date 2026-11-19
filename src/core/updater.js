@@ -1,18 +1,18 @@
 'use strict';
 /**
- * 在线更新：从 GitHub Releases（zaiddia/Lanzador-APK）取最新版本，下载并原地替换。
+ * Actualización en línea: obtiene la última versión de GitHub Releases (zaiddia/Lanzador-APK), la descarga y la reemplaza en el sitio.
  *
- * 三个形态都要照顾到：
- *   - 安装版（NSIS）：下载 `LanzadorAPK-x.y.z-Setup.exe`，静默安装（/S）；
- *   - 轻量版（便携 zip，运行时按需下载）：下载 `LanzadorAPK-vX-win64-portable.zip`，
- *     解压后覆盖程序目录 —— 运行时目录（%APPDATA%\lanzadorapk\runtime）与已装应用、
- *     快照全都在用户目录里，替换程序文件不会动它们；
- *   - 完整版（便携但带 runtime）：同轻量版，只是目录里多了 resources\runtime。
+ * Hay que cubrir tres formas:
+ *   - versión instalada (NSIS): descarga `LanzadorAPK-x.y.z-Setup.exe` y la instala en silencio (/S);
+ *   - versión ligera (zip portátil, runtime bajo demanda): descarga `LanzadorAPK-vX-win64-portable.zip`,
+ *     la descomprime y sobrescribe la carpeta del programa; la carpeta del runtime (%APPDATA%\lanzadorapk\runtime), las apps instaladas
+ *     y las instantáneas están en la carpeta del usuario, así que reemplazar los archivos del programa no las toca;
+ *   - versión completa (portátil con runtime): igual que la ligera, solo que la carpeta tiene además resources\runtime.
  *
- * 替换不能在本进程里做（exe 正被占用），所以生成一段 PowerShell 脚本，
- * 用 EncodedCommand 交给独立进程：等本进程退出 → 复制文件 → 重新拉起。
- * 用 base64 传脚本而不是写 .ps1 文件，是为了绕开「路径含中文时脚本被按 GBK 解码」
- * 这类老问题（PowerShell 5.1 读无 BOM 脚本会按 ANSI 解释）。
+ * El reemplazo no se puede hacer en este proceso (el exe está en uso), así que se genera un script de PowerShell
+ * que se pasa con EncodedCommand a un proceso independiente: espera a que este proceso salga → copia archivos → vuelve a lanzar.
+ * El script se pasa en base64 y no como archivo .ps1 para evitar el viejo problema de
+ * «script decodificado como GBK si la ruta tiene caracteres no ASCII» (PowerShell 5.1 interpreta como ANSI los scripts sin BOM).
  */
 const fs = require('fs');
 const path = require('path');
@@ -25,12 +25,12 @@ const { Sources } = require('./sources');
 
 const { OWNER, REPO } = require('./brand');
 
-/** PowerShell 单引号字符串：内部的 ' 要写成 '' */
+/** Cadena entre comillas simples de PowerShell: cada ' interna se escribe '' */
 function psq(s) {
   return `'${String(s).replace(/'/g, "''")}'`;
 }
 
-/** 在目录第一层里按名字（大小写不敏感）找文件，返回实际名字或 null */
+/** Busca un archivo por nombre (sin distinguir mayúsculas) en el primer nivel de la carpeta; devuelve el nombre real o null */
 function findInDir(dir, name) {
   try {
     const lower = name.toLowerCase();
@@ -41,10 +41,10 @@ function findInDir(dir, name) {
 }
 
 /**
- * 在程序目录里找 NSIS 卸载器，找不到返回 null。
- * electron-builder 的默认命名是 `Uninstall <productName>.exe`（updater.flavor 认这个），
- * 老版本/自定义打包也可能叫 `uninstaller.exe`（main.js 旧代码只认这个）。
- * 两处必须用同一套规则，否则安装版点「一键卸载」会被误判成便携版（issue #51）。
+ * Busca el desinstalador NSIS en la carpeta del programa; si no lo encuentra devuelve null.
+ * El nombre por defecto de electron-builder es `Uninstall <productName>.exe` (lo que reconoce updater.flavor);
+ * versiones viejas/empaquetados personalizados pueden llamarlo `uninstaller.exe` (el código viejo de main.js solo reconocía ese).
+ * Ambos lugares deben usar las mismas reglas; si no, «Desinstalar» en la versión instalada se tomaría por versión portátil (issue #51).
  */
 function findUninstaller(installDir) {
   try {
@@ -70,13 +70,13 @@ class Updater {
     this.dataDir = o.dataDir;
     this.onProgress = o.onProgress || (() => {});
     this.settings = typeof o.settings === 'function' ? o.settings : () => (o.settings || {});
-    // settings() 给 sources 用：决定「走 GitHub 还是 Gitee」「有没有镜像前缀」
+    // settings() es para sources: decide si hay un prefijo de espejo
     this.sources = new Sources(this.settings);
     this.latest = null;
     this._last = null;
   }
 
-  /** 安装形态：安装版（有卸载器）还是便携包 */
+  /** Forma de instalación: versión instalada (con desinstalador) o paquete portátil */
   get flavor() {
     return findUninstaller(this.installDir) ? 'setup' : 'portable';
   }
@@ -86,19 +86,19 @@ class Updater {
   }
 
   /**
-   * 检查更新：GitHub / Gitee 并发问，取版本号更高的，资产取并集。
-   * 具体下载地址在 prepare() 里再做一次真实测速排序。
+   * Buscar actualizaciones: consulta GitHub y toma la versión más alta con sus archivos.
+   * Las direcciones concretas de descarga se vuelven a ordenar por velocidad real en prepare().
    */
   /**
-   * @param {{force?:boolean}} [opts] force=true 时跳过 10 分钟的版本缓存
-   *        （用户主动点「检查更新」应该拿到最新结果；启动时的静默检查走缓存）
+   * @param {{force?:boolean}} [opts] force=true omite la caché de versiones de 10 minutos
+   *        (cuando el usuario pulsa «Buscar actualizaciones» debe obtener el resultado más reciente; la comprobación silenciosa al iniciar usa la caché)
    */
   async check(opts = {}) {
     const merged = await this.sources.latest({ force: !!opts.force });
     const pick = (re) => merged.assets.find((a) => re.test(String(a.name || '')));
-    // 发行版里同时挂着「便携包」和「运行时整包」（LanzadorAPK-runtime-*.zip）。
-    // 兜底的 .zip 匹配必须把运行时整包排除掉：某次发布如果只有运行时整包、
-    // 没有便携包，旧逻辑会把它当更新包解压进程序目录（多出 1.5GB 文件、程序也被换坏）。
+    // La versión publicada trae a la vez el «paquete portátil» y el «paquete del runtime» (LanzadorAPK-runtime-*.zip).
+    // La coincidencia .zip de respaldo debe excluir el paquete del runtime: si una versión solo tuviera el runtime
+    // y no el portátil, la lógica anterior lo descomprimiría en la carpeta del programa como actualización (1,5 GB de archivos de más y el programa roto).
     const isRuntimePack = (a) => /runtime/i.test(String((a && a.name) || ''));
 
     const wantSetup = this.flavor === 'setup';
@@ -114,14 +114,14 @@ class Updater {
       notes: merged.notes,
       htmlUrl: merged.htmlUrl,
       publishedAt: merged.publishedAt,
-      // 注意带上 parts：Gitee 的分片包没有单一 url，丢掉 parts 就变成「有资产但没地址」
+      // Ojo, se pasan también parts: los paquetes en partes no tienen una url única; sin parts quedarían «con archivo pero sin dirección»
       asset: asset
         ? {
           name: asset.name,
           size: asset.size,
           url: asset.url,
-          // 同名资产在 GitHub / Gitee 都有：两个地址都带着，prepare() 里测速择快。
-          // sizes 是「每个地址各自的大小」——两个源压出来的字节数并不相同。
+          // El mismo archivo en varias direcciones: se llevan todas y prepare() mide y elige la más rápida.
+          // sizes es «el tamaño de cada dirección»: los paquetes de distintas fuentes no tienen los mismos bytes.
           urls: asset.urls,
           sizes: asset.sizes,
           source: asset.source,
@@ -131,7 +131,7 @@ class Updater {
         }
         : null,
       assets: merged.assets,
-      // 两个源各自的最新版本 / 谁不可达，界面上可以如实显示「这次走的哪个源」
+      // La versión más reciente de cada fuente / cuáles no son accesibles, para que la interfaz muestre con honestidad «qué fuente se usó»
       sources: merged.sources,
       unreachable: merged.unreachable,
       flavor: this.flavor,
@@ -146,7 +146,7 @@ class Updater {
   }
 
   /**
-   * 下载并准备好「载荷」：便携版解压到 update/<ver>/payload，安装版直接留 Setup.exe。
+   * Descarga y prepara el «contenido»: la versión portátil se descomprime en update/<ver>/payload, la instalada deja el Setup.exe.
    * @returns {Promise<{mode:'zip'|'setup', payload:string, version:string}>}
    */
   async prepare(info) {
@@ -162,26 +162,26 @@ class Updater {
     let total = it.asset.size || 0;
     const conns = Math.max(1, Math.min(16, Number((this.settings().runtime || {}).downloadConnections) || 8));
 
-    // Gitee 附件单文件上限 100MB，所以发布时会把包切成 .part1/.part2。
-    // 每个分片单独测速选源（可以一部分来自 Gitee、一部分来自 GitHub 镜像），
-    // 下完按顺序拼回整包 —— 对用户来说仍然只是「下载 + 解压」。
+    // Formato heredado: algunos paquetes se publicaban en partes .part1/.part2.
+    // Cada parte mide y elige su fuente por separado,
+    // y al terminar se unen en orden: para el usuario sigue siendo solo «descargar + descomprimir».
     if (it.asset.parts && it.asset.parts.length) {
       await this._downloadParts(it.asset, file, conns, total);
     } else {
       this.onProgress({ stage: 'download', percent: 1, message: `Descargando ${it.asset.name}…` });
-      // 候选地址 = 源站 + 镜像前缀；先各下 256KB 实测速度，再拿最快的那个分块下载。
-      // 这是「GitHub 直连几十 KB/s、镜像能跑几 MB/s」时唯一靠谱的选路方式：
-      // 按域名猜没用，同一天不同时段差别很大。
+      // Direcciones candidatas = fuente original + prefijo de espejo; primero se bajan 256 KB de cada una para medir la velocidad y luego se descarga por bloques desde la más rápida.
+      // Es la única forma fiable de elegir cuando GitHub directo da decenas de KB/s y un espejo varios MB/s:
+      // adivinar por el dominio no sirve; en el mismo día cambia mucho según la hora.
       const cands = this.sources.candidates(it.asset);
       const ranked = await this.sources.rank(cands, { onProgress: (p) => this.onProgress(p) }).catch(() => cands);
-      // 进度用的总大小要取「真正在下那个源」的：GitHub 与 Gitee 的包不是同一份字节
-      // （压缩器不同，能差好几 MB），拿错就会一直显示 92% 再突然跳到完成。
+      // El tamaño total para el progreso debe ser el de «la fuente que realmente descarga»: los paquetes de distintas fuentes no son los mismos bytes
+      // (otro compresor, varios MB de diferencia); con el equivocado se quedaría en 92 % y saltaría de golpe a completado.
       const sizes = it.asset.sizes || {};
       for (const u of ranked) {
         if (sizes[u]) { total = sizes[u]; break; }
       }
-      // downloadMulti：分块同时从「GitHub 直连」和「镜像」拉，带宽叠加；
-      // 只有一个源可用或对方不支持 Range 时，它自己退回单源分块。
+      // downloadMulti: baja bloques a la vez de «GitHub directo» y del «espejo», sumando ancho de banda;
+      // si solo hay una fuente o no admite Range, vuelve solo a bloques de una sola fuente.
       await downloadMulti(ranked, file, {
         connections: conns,
         onProgress: (pr) => {
@@ -203,9 +203,9 @@ class Updater {
 
     if (/\.zip$/i.test(file)) {
       const out = path.join(dir, 'payload');
-      // issue #98：上一次已经下载+解压完成，但替换/重启没成功时，
-      // 直接复用这份载荷，绝不再下一遍 100MB —— 这正是「更新死循环」的来源。
-      // 就绪标记由本函数写、替换脚本成功后清掉，所以只有完整解压过的载荷才会被复用。
+      // issue #98: si la vez anterior ya se descargó + descomprimió pero el reemplazo/reinicio falló,
+      // se reutiliza este contenido directamente; nunca se vuelven a bajar 100 MB: esa era la causa del «bucle infinito de actualización».
+      // Esta función escribe la marca de listo y el script de reemplazo la borra al tener éxito, así que solo se reutiliza contenido descomprimido por completo.
       if (this._payloadReady(out, it.version)) {
         this.onProgress({ stage: 'ready', percent: 100, message: 'Ya hay un paquete de actualización descargado; se reutiliza' });
         return { mode: 'zip', payload: out, version: it.version };
@@ -222,7 +222,7 @@ class Updater {
   }
 
   /**
-   * 下载并拼装分片包。
+   * Descarga y une un paquete en partes.
    * @param {{name:string, size:number, parts:Array<{index:number,size:number,urls:string[]}>}} asset
    */
   async _downloadParts(asset, target, conns, total) {
@@ -279,7 +279,7 @@ class Updater {
       let i = 0;
       for (const n of names) {
         i += 1;
-        // 防 zip-slip：统一走 zip.js 的守卫（挡 ../、绝对路径、盘符、反斜杠绕过）
+        // Protección zip-slip: siempre por la protección de zip.js (bloquea ../, rutas absolutas, letras de unidad, trucos con barra invertida)
         const target = resolveZipEntry(dest, n);
         if (!target) continue;
         fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -297,22 +297,22 @@ class Updater {
     }
   }
 
-  /** 载荷就绪标记文件：解压完整落盘后才写，供跨进程复用判断 */
+  /** Archivo de marca de contenido listo: se escribe solo cuando la descompresión terminó en disco, para decidir la reutilización entre procesos */
   _readyFile(payload) { return path.join(payload, '.lanzadorapk-ready'); }
 
   _markPayloadReady(payload, version) {
     try {
       fs.writeFileSync(this._readyFile(payload), JSON.stringify({ version, at: Date.now() }), 'utf8');
-    } catch (_) { /* 标记写不了就下次重下，不影响正确性 */ }
+    } catch (_) { /* Si no se puede escribir la marca, la próxima vez se vuelve a descargar; no afecta la corrección */ }
   }
 
   _payloadReady(payload, version) {
     try {
       if (!fs.existsSync(this._readyFile(payload))) return false;
       const m = JSON.parse(fs.readFileSync(this._readyFile(payload), 'utf8'));
-      // 版本不符 = 上次下的是别的版本，不能复用
+      // Versión distinta = lo descargado la vez anterior era otra versión; no se puede reutilizar
       if (m.version !== version) return false;
-      // 关键：程序主 exe 必须在载荷里。没有它说明解压被中断/被杀软删过。
+      // Clave: el exe principal debe estar en el contenido. Si no está, la descompresión se interrumpió o el antivirus lo borró.
       const exeName = path.basename(this.exePath || 'LanzadorAPK.exe');
       return !!findInDir(payload, exeName);
     } catch (_) {
@@ -321,15 +321,15 @@ class Updater {
   }
 
   /**
-   * 启动时调用：找回「上次已下载解压、但替换/重启失败」的更新并续做。
-   * 直接走本地载荷，不再重新下载（issue #98 的死循环根治）。
+   * Se llama al iniciar: recupera y completa la actualización «descargada y descomprimida la vez anterior, pero cuyo reemplazo/reinicio falló».
+   * Usa directamente el contenido local, sin volver a descargar (solución de raíz al bucle de la issue #98).
    * @returns {{mode:'zip', payload:string, version:string}|null}
    */
   findResumableJob() {
     try {
       if (!fs.existsSync(this.updateDir)) return null;
       const versions = fs.readdirSync(this.updateDir)
-        .filter((n) => cmpVer(n, this.current) > 0)   // 只认比当前更新的版本，避免反复重启
+        .filter((n) => cmpVer(n, this.current) > 0)   // Solo versiones más nuevas que la actual, para no reiniciar una y otra vez
         .sort((a, b) => cmpVer(b, a));
       for (const v of versions) {
         const payload = path.join(this.updateDir, v, 'payload');
@@ -340,9 +340,9 @@ class Updater {
   }
 
   /**
-   * 生成并启动「替换 + 重启」脚本，然后调用方负责退出应用。
+   * Genera e inicia el script de «reemplazar + reiniciar»; después quien llama se encarga de cerrar la app.
    * @param {{mode:'zip'|'setup', payload:string, version:string}} job
-   * @param {{waitPid?:number, spawn?:boolean}} [opts] 测试时可指定别的 pid / 不真启动
+   * @param {{waitPid?:number, spawn?:boolean}} [opts] en pruebas se puede indicar otro pid / no lanzarlo de verdad
    */
   apply(job, opts = {}) {
     const exe = this.exePath;
@@ -357,16 +357,16 @@ class Updater {
       `function Note($m) { Add-Content -Path $log -Value ("[{0}] {1}" -f (Get-Date -Format 'HH:mm:ss'), $m) }`,
       `Note 'updater start'`,
       `$applyOk = $true`,
-      // 等本进程真正退出（最多 90 秒），否则 exe/dll 仍被占用
+      // Espera a que este proceso salga de verdad (hasta 90 s); si no, exe/dll siguen en uso
       `try { Wait-Process -Id ${waitPid} -Timeout 90 } catch { }`,
       `Start-Sleep -Milliseconds 700`,
     ];
 
     if (job.mode === 'zip') {
-      // issue #98：旧脚本只测「目标 exe 是否存在」——它本来就存在，于是 copy
-      // 失败也被当成成功，接着删掉载荷、重启旧版本 → 下次开机又检测到更新 → 死循环。
-      // 改成：复制前先把目标 exe 改名成 .old，复制后确认新 exe 真的落盘且字节数
-      // 与载荷一致；失败则回滚 .old，并**保留载荷**交给下次启动续做。
+      // issue #98: el script anterior solo comprobaba «si existe el exe de destino»; como ya existía, una copia
+      // fallida se tomaba por exitosa, luego se borraba el contenido y se reiniciaba la versión vieja → al arrancar se detectaba otra vez la actualización → bucle infinito.
+      // Ahora: antes de copiar se renombra el exe de destino a .old y tras copiar se confirma que el nuevo exe esté en disco y que su tamaño
+      // coincida con el contenido; si falla se restaura el .old y **se conserva el contenido** para que el próximo inicio lo complete.
       const exeName = path.basename(exe);
       lines.push(
         `$src = ${psq(job.payload)}`,
@@ -392,7 +392,7 @@ class Updater {
         `  if ($hasBackup) { try { Move-Item -LiteralPath $backup -Destination $target -Force } catch {} }`,
         `} else {`,
         `  if ($hasBackup) { try { Remove-Item -LiteralPath $backup -Force } catch {} }`,
-        // 只有确认复制成功，才清掉载荷与就绪标记；否则留给 findResumableJob 续做。
+        // Solo si se confirma que la copia salió bien se borran el contenido y la marca de listo; si no, quedan para findResumableJob.
         `  try { Remove-Item -LiteralPath (Join-Path $src '.lanzadorapk-ready') -Force } catch {}`,
         `  Remove-Item -Path $src -Recurse -Force`,
         `}`,
@@ -407,8 +407,8 @@ class Updater {
     }
 
     lines.push(
-      // issue #98：只 Start-Process 一次、失败就无声无息 → 用户看到「关了但没重启」。
-      // 加 -WorkingDirectory（便携版相对路径资源），失败再退回 cmd /c start，并写日志。
+      // issue #98: un solo Start-Process y si fallaba no decía nada → el usuario veía «se cerró pero no reinició».
+      // Se agrega -WorkingDirectory (recursos con rutas relativas en la versión portátil); si falla se usa cmd /c start, y se registra.
       `if (Test-Path ${psq(exe)}) {`,
       `  try {`,
       `    Start-Process -FilePath ${psq(exe)} -WorkingDirectory ${psq(dir)} -ErrorAction Stop`,
@@ -423,24 +423,24 @@ class Updater {
       `} else { Note 'relaunch skipped: exe missing' }`,
       `Note 'updater done'`,
       `Start-Sleep -Milliseconds 400`,
-      // 复制失败时保留整个版本目录（载荷 + 就绪标记），交给下次启动续做；
-      // 否则会前脚说「保留载荷」后脚又把它删掉，续做永远拿不到文件。
+      // Si falla la copia se conserva toda la carpeta de la versión (contenido + marca de listo) para que el próximo inicio la complete;
+      // si no, se diría «se conserva el contenido» y acto seguido se borraría, y nunca se podría completar.
       `if ($applyOk) { Remove-Item -Path ${psq(path.join(this.updateDir, job.version))} -Recurse -Force }`,
       `else { Note 'version dir kept for resume on next launch' }`,
-      // 收尾的清理语句失败（目录已被删/被杀软占用）不应该让调用方以为更新失败
+      // Un fallo de la limpieza final (carpeta ya borrada/ocupada por el antivirus) no debe hacer creer a quien llama que la actualización falló
       `exit 0`,
     );
 
     const script = lines.join('\r\n');
     fs.writeFileSync(path.join(this.updateDir, 'apply.log.ps1'), script, 'utf8');
     if (opts.spawn === false) return script;
-    // -EncodedCommand 走 UTF-16LE base64：脚本里出现中文路径也不会被 GBK 解码搞坏
+    // -EncodedCommand usa base64 UTF-16LE: aunque el script tenga rutas con caracteres no ASCII no se dañan con la decodificación GBK
     const b64 = Buffer.from(script, 'utf16le').toString('base64');
     const ps = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-    // 这里**不能**用 detached：某些安全软件 / 沙箱策略会直接拦掉「分离的控制台进程」，
-    // 表现为脚本一声不响地根本没跑（更新界面卡在「正在替换程序并重启」）。
-    // Windows 上父进程退出并不会杀掉普通子进程，所以用「普通子进程 + unref」同样能在
-    // 我们退出之后继续干活，兼容性还更好。
+    // Aquí **no se puede** usar detached: algunos programas de seguridad / políticas de sandbox bloquean los «procesos de consola separados»,
+    // y el script simplemente no se ejecutaba (la pantalla de actualización quedaba en «Reemplazando el programa y reiniciando»).
+    // En Windows la salida del proceso padre no mata a los procesos hijos normales, así que «proceso hijo normal + unref» también
+    // sigue trabajando después de que salgamos, y es más compatible.
     const child = spawn(ps, [
       '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
       '-WindowStyle', 'Hidden', '-EncodedCommand', b64,
@@ -449,7 +449,7 @@ class Updater {
     return true;
   }
 
-  /** 打不开 UI 的场景（或没有可自动安装的资产）时，把发布页丢给浏览器 */
+  /** Si no se puede abrir la interfaz (o no hay archivos instalables automáticamente), se abre la página de versiones en el navegador */
   static repoUrl() {
     return `https://github.com/${OWNER}/${REPO}/releases`;
   }

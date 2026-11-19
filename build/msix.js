@@ -1,21 +1,21 @@
 'use strict';
 /**
- * 微软商店（MSIX）打包。
+ * Empaquetado para Microsoft Store (MSIX).
  *
- * 为什么不用 electron-builder 的 appx 目标：
- *   - 26.x 只有 appx（没有 msix），且会在构建期偷偷下载一整套 Windows SDK
- *     工具集（windows-kits-bundle-10_0_26100_0.zip）当黑盒依赖；
- *   - 我们要在清单里塞自己的一批东西（runFullTrust、文件关联、审核备注对应的
- *     身份信息），手写清单比改它的模板更可控。
- * 所以这里自己组 stage + 自己调 makeappx，只依赖 Windows SDK 里的两个 exe。
+ * Por qué no se usa el destino appx de electron-builder:
+ *   - la 26.x solo tiene appx (no msix) y al compilar descarga a escondidas todo un juego de herramientas del Windows SDK
+ *     (windows-kits-bundle-10_0_26100_0.zip) como dependencia opaca;
+ *   - necesitamos poner cosas propias en el manifiesto (runFullTrust, asociación de archivos, la identidad
+ *     que corresponde a las notas de revisión); escribir el manifiesto a mano es más controlable que modificar su plantilla.
+ * Por eso aquí armamos el stage y llamamos a makeappx nosotros mismos; solo dependemos de dos exe del Windows SDK.
  *
- * 用法：
- *   node build/msix.js                       # 用 dist/release/win-unpacked 打不签名的包
- *   node build/msix.js --stage <dir>         # 指定已解包的目录
- *   node build/msix.js --sign                # 顺手生成自签证书并签名（本地测试用）
- *   node build/msix.js --identity Name --publisher "CN=..." --display 名称
+ * Uso:
+ *   node build/msix.js                       # paquete sin firmar desde dist/release/win-unpacked
+ *   node build/msix.js --stage <dir>         # carpeta ya desempaquetada
+ *   node build/msix.js --sign                # genera un certificado autofirmado y firma (para pruebas locales)
+ *   node build/msix.js --identity Name --publisher "CN=..." --display Nombre
  *
- * 环境变量也可以：LANZADORAPK_MSIX_IDENTITY / LANZADORAPK_MSIX_PUBLISHER / LANZADORAPK_MSIX_DISPLAY
+ * También con variables de entorno: LANZADORAPK_MSIX_IDENTITY / LANZADORAPK_MSIX_PUBLISHER / LANZADORAPK_MSIX_DISPLAY
  */
 const fs = require('fs');
 const os = require('os');
@@ -26,7 +26,7 @@ const { encodePng, drawAppIcon } = require('../src/core/png');
 const ROOT = path.join(__dirname, '..');
 const pkg = require(path.join(ROOT, 'package.json'));
 
-// ---------------- 参数 ----------------
+// ---------------- Parámetros ----------------
 
 function arg(name, fallback = null) {
   const i = process.argv.indexOf(`--${name}`);
@@ -36,16 +36,16 @@ function arg(name, fallback = null) {
 }
 
 const VERSION = String(pkg.version || '0.0.0');
-// MSIX 的 Version 必须是四段，且第四段固定为 0（Store 要求）
+// La versión MSIX debe tener cuatro partes y la cuarta siempre 0 (requisito de la Store)
 function msixVersion(v) {
   const p = String(v).split(/[.\-+]/).filter((x) => /^\d+$/.test(x)).slice(0, 3);
   while (p.length < 3) p.push('0');
   return `${p[0]}.${p[1]}.${p[2]}.0`;
 }
 
-// Partner Center → Product management → Product identity 里确认过的两个值。
-// 直接写成默认值：以前默认是占位 `CN=zaiddia`，任何人随手跑一次
-// `node build/msix.js` 就会把已经正确的包覆盖成一个商店必然拒收的包。
+// Los dos valores de Partner Center → Product management → Product identity.
+// Se dejan como valores por defecto a propósito; si el valor por defecto fuera un marcador cualquiera,
+// un `node build/msix.js` hecho al azar generaría un paquete que la Store rechazaría.
 const PLACEHOLDER_PUBLISHER = 'CN=zaiddia';
 const CONFIRMED_IDENTITY = 'zaiddia.LanzadorAPK';
 // Fill in the value from Partner Center → Product management → Product identity.
@@ -62,17 +62,17 @@ const STAGE = path.resolve(String(arg('stage')
 const OUT_DIR = path.resolve(String(arg('out') || path.join(ROOT, 'dist', 'store')));
 
 /**
- * 选「载荷目录」：就是 MSIX 里 `app\` 下面那份 LanzadorAPK.exe + resources。
+ * Elige la «carpeta de contenido»: el LanzadorAPK.exe + resources que van en `app\` dentro del MSIX.
  *
- * 两条来源，优先离线那条：
- *   A. dist/LanzadorAPK-win64-portable —— `node build/pack.js` 的产物，**不需要联网**。
- *      它只有壳，不带运行时，所以这里额外把 build/runtime 复制进
- *      resources/runtime（就是 electron-builder 的 extraResources 干的事）。
- *   B. dist/release/win-unpacked —— `electron-builder --win dir` 的产物，自带
- *      resources/runtime。但那一步会去 CDN 拉工具集，没网时会只解一半
- *      （只剩 electron.exe、runtime 没复制），所以只作为备选。
+ * Dos fuentes posibles, primero la que no necesita red:
+ *   A. dist/LanzadorAPK-win64-portable: resultado de `node build/pack.js`, **no necesita internet**.
+ *      Solo tiene el envoltorio sin runtime, así que aquí se copia además build/runtime a
+ *      resources/runtime (lo mismo que hace extraResources de electron-builder).
+ *   B. dist/release/win-unpacked: resultado de `electron-builder --win dir`, trae
+ *      resources/runtime. Pero ese paso descarga herramientas de una CDN y sin red queda a medias
+ *      (solo electron.exe, sin copiar el runtime), así que es la segunda opción.
  *
- * 用 --payload 可以显式指定。
+ * Con --payload se puede indicar explícitamente.
  */
 function resolvePayload() {
   const explicit = arg('payload');
@@ -86,9 +86,9 @@ function resolvePayload() {
   return { dir: STAGE, addRuntime: false };
 }
 
-// ---------------- 资源图标 ----------------
-// 清单里只写 100% 尺寸的那 5 张图。一旦目录里出现 .scale-* / .targetsize-*
-// 文件，就必须额外生成 resources.pri（makepri），复杂度陡增 —— 首版不碰。
+// ---------------- Iconos de recursos ----------------
+// El manifiesto solo usa las 5 imágenes de tamaño 100 %. Si en la carpeta aparecen archivos .scale-* / .targetsize-*
+// hay que generar además resources.pri (makepri) y la complejidad se dispara; la primera versión no lo toca.
 const ASSETS = [
   { file: 'StoreLogo.png', w: 50, h: 50 },
   { file: 'Square44x44Logo.png', w: 44, h: 44 },
@@ -99,10 +99,10 @@ const ASSETS = [
   { file: 'SplashScreen.png', w: 620, h: 300 },
 ];
 
-const BG = [20, 22, 27];        // #14161b 深底
-const ACCENT = [61, 220, 132];  // #3ddc84 安卓绿
+const BG = [20, 22, 27];        // #14161b fondo oscuro
+const ACCENT = [61, 220, 132];  // #3ddc84 verde Android
 
-/** 圆角矩形命中（用于在非正方形画布上画品牌图标） */
+/** Prueba de rectángulo redondeado (para dibujar el icono de marca en lienzos no cuadrados) */
 function inRoundRect(px, py, x, y, w, h, r) {
   const cx = Math.min(Math.max(px, x + r), x + w - r);
   const cy = Math.min(Math.max(py, y + r), y + h - r);
@@ -111,7 +111,7 @@ function inRoundRect(px, py, x, y, w, h, r) {
   return dx * dx + dy * dy <= r * r;
 }
 
-/** 在 w×h 画布中央画一个边长 side 的品牌图标（圆角深块 + 绿色播放三角） */
+/** Dibuja en el centro de un lienzo w×h el icono de marca de lado side (bloque oscuro redondeado + triángulo verde) */
 function composeIcon(w, h, side) {
   const rgba = new Uint8Array(w * h * 4);
   const ox = (w - side) / 2;
@@ -139,7 +139,7 @@ function composeIcon(w, h, side) {
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const i = (y * w + x) * 4;
-      // 底板：整块深色（磁贴/启动画面都是满幅背景）
+      // Fondo: todo oscuro (mosaicos y pantalla de inicio son fondos completos)
       let r = BG[0];
       let g = BG[1];
       let b = BG[2];
@@ -159,7 +159,7 @@ function composeIcon(w, h, side) {
   return encodePng(w, h, rgba);
 }
 
-/** 预渲染资源：build/build-icons.js 统一产出的主标与小尺寸简化标 */
+/** Recursos prerenderizados: logo principal y logos pequeños generados por build/build-icons.js */
 const STORE_ASSETS = path.join(ROOT, 'build', 'store-assets');
 
 function writeAssets(dir) {
@@ -171,7 +171,7 @@ function writeAssets(dir) {
     if (fs.existsSync(pre)) {
       buf = fs.readFileSync(pre);
     } else {
-      // 回退：没跑过 build-icons 时仍能出包，但图标不保证跨尺寸统一
+      // Respaldo: si no se ejecutó build-icons igual se genera el paquete, pero los iconos pueden no ser coherentes entre tamaños
       buf = (a.w === a.h)
         ? drawAppIcon(a.w)
         : composeIcon(a.w, a.h, Math.min(a.h * 0.72, a.w * 0.42));
@@ -183,7 +183,7 @@ function writeAssets(dir) {
   return made;
 }
 
-// ---------------- 清单 ----------------
+// ---------------- Manifiesto ----------------
 
 function manifest() {
   return `<?xml version="1.0" encoding="utf-8"?>
@@ -261,7 +261,7 @@ function manifest() {
 `;
 }
 
-// ---------------- 找 makeappx / signtool ----------------
+// ---------------- Buscar makeappx / signtool ----------------
 
 function which(exe) {
   const cands = [];
@@ -273,7 +273,7 @@ function which(exe) {
     const p = path.join(dir, exe);
     try { if (fs.statSync(p).isFile()) push(p); } catch (_) { /* next */ }
   }
-  // 2) Windows SDK（10.0.x 任意版本，优先 x64）
+  // 2) Windows SDK (cualquier 10.0.x, preferiblemente x64)
   const kits = [
     path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Windows Kits', '10', 'bin'),
     path.join(process.env['ProgramFiles'] || 'C:\\Program Files', 'Windows Kits', '10', 'bin'),
@@ -289,7 +289,7 @@ function which(exe) {
       }
     }
   }
-  // 3) electron-builder 自己下载的工具缓存（跑过一次 --win appx 就有）
+  // 3) caché de herramientas que descarga electron-builder (existe tras ejecutar una vez --win appx)
   const cacheRoot = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'electron-builder', 'Cache');
   const stack = [cacheRoot];
   let guard = 0;
@@ -307,12 +307,12 @@ function which(exe) {
   if (!cands.length) return null;
 
   /**
-   * 挑最新的一份工具。
+   * Elige la versión más nueva de la herramienta.
    *
-   * 这一步很关键：winCodeSign 解出来的工具集里同时有 windows-6 / windows-8 /
-   * windows-10 三代 signtool.exe。windows-6 那份签 MSIX 会直接报
-   * `0x80080209 (SignerSign failed)` —— 它还不认识 MSIX 的 SIP 结构。
-   * 所以必须显式偏好 windows-10\x64，而不是「先把哪个找出来就用哪个」。
+   * Este paso es clave: el juego de herramientas de winCodeSign trae signtool.exe de tres generaciones,
+   * windows-6 / windows-8 / windows-10. El de windows-6 falla al firmar MSIX con
+   * `0x80080209 (SignerSign failed)` porque no conoce la estructura SIP de MSIX.
+   * Por eso hay que preferir explícitamente windows-10\x64, no «el primero que aparezca».
    */
   const score = (p) => {
     const l = p.toLowerCase();
@@ -332,10 +332,10 @@ function run(exe, args, opts = {}) {
   return execFileSync(exe, args, { stdio: 'inherit', windowsHide: true, ...opts });
 }
 
-// 独立运行守卫：MSIX 里不许出现 MuMu 等第三方模拟器（自带运行时才是唯一依赖）
+// Vigilante de independencia: el MSIX no puede contener MuMu u otros emuladores de terceros (el runtime propio es la única dependencia)
 const { assertStandalone } = require('./guard-standalone');
 
-// ---------------- 主流程 ----------------
+// ---------------- Flujo principal ----------------
 
 function stagePackage() {
   const pick = resolvePayload();
@@ -354,11 +354,11 @@ function stagePackage() {
   fs.mkdirSync(appDir, { recursive: true });
   console.log(`复制应用载荷（来源 ${appSrc}）…`);
   fs.cpSync(appSrc, appDir, { recursive: true });
-  // 这些是 Electron/electron-builder 的中间产物，不该进包
+  // Son archivos intermedios de Electron/electron-builder; no deben ir en el paquete
   for (const junk of ['builder-debug.yml', 'builder-effective-config.yaml', '.icon-ico', 'VERSION.txt']) {
     fs.rmSync(path.join(appDir, junk), { force: true, recursive: true });
   }
-  // 便携版不带运行时：把 build/runtime 复制进去（等价于 electron-builder 的 extraResources）
+  // La versión portátil no trae runtime: se copia build/runtime (equivale a extraResources de electron-builder)
   if (pick.addRuntime) {
     console.log(`内置运行时 ${pick.runtime} → app/resources/runtime（约 1 GB，需要一会儿）…`);
     fs.cpSync(pick.runtime, path.join(appDir, 'resources', 'runtime'), { recursive: true });
@@ -370,7 +370,7 @@ function stagePackage() {
   } else {
     console.log('运行时已内置（emulator / platform-tools / system-images）');
   }
-  // 打完载荷立刻守一次：商店包必须自带运行时、独立运行，不能夹带任何第三方模拟器
+  // Revisión inmediata tras armar el contenido: el paquete de la Store debe traer su runtime y no incluir emuladores de terceros
   assertStandalone(appDir, { label: 'MSIX 载荷 app/' });
   console.log('生成商店图标…');
   const made = writeAssets(path.join(work, 'Assets'));
@@ -382,8 +382,8 @@ function stagePackage() {
 
 function main() {
   console.log(`LanzadorAPK MSIX 打包  版本 ${VERSION} → ${msixVersion(VERSION)}`);
-  // 身份守卫：占位 Publisher 打出来的包商店一定拒收（0x800B0109 / 身份不匹配）。
-  // 光靠文档提醒没用 —— 默认值曾经就是占位值，一次随手重建就把好包覆盖掉了。
+  // Vigilante de identidad: un paquete con Publisher de marcador siempre lo rechaza la Store (0x800B0109 / identidad no coincide).
+  // Avisar en la documentación no basta: el valor por defecto llegó a ser un marcador y una recompilación casual sobrescribió el paquete bueno.
   if ((/PON-AQUI/i.test(String(PUBLISHER)) || PUBLISHER === PLACEHOLDER_PUBLISHER) && !process.argv.includes('--allow-placeholder')) {
     console.error(`\nPublisher 不是 Partner Center 确认过的值：${PUBLISHER}`);
     console.error(`已确认值是 ${CONFIRMED_PUBLISHER}（Identity ${CONFIRMED_IDENTITY}）。`);
@@ -412,7 +412,7 @@ function main() {
   const mb = fs.statSync(out).size / 1048576;
   console.log(`\n完成：${out}  (${mb.toFixed(0)} MB)`);
 
-  // 用 .NET 的 ZipFile 自检：包内必须有清单 + 块映射 + 内容类型
+  // Autocomprobación con ZipFile de .NET: el paquete debe tener manifiesto + mapa de bloques + tipos de contenido
   try {
     const { execFileSync: ex } = require('child_process');
     const ps = [
@@ -425,20 +425,20 @@ function main() {
       + `"entries: " + $n.Count`,
     ];
     ex('powershell.exe', ps, { stdio: 'inherit', windowsHide: true });
-  } catch (_) { /* 自检失败不影响产物 */ }
+  } catch (_) { /* Si la autocomprobación falla, el resultado no se ve afectado */ }
 
   if (DO_SIGN) sign(out);
   else {
     console.log('\n未签名（Store 会用自己的证书重签，提交时不需要签名）。');
     console.log('本地想装的话加 --sign 生成自签证书并签名。');
   }
-  // stage 是 1.3 GB 的中间产物，留着没用还会让人以为「包里有两份」，
-  // 打包成功后直接清掉（要排查就加 --keep-stage）。
+  // stage es un intermedio de 1,3 GB; conservarlo no sirve y hace pensar que «el paquete está duplicado»,
+  // así que se borra tras empaquetar con éxito (para depurar, agrega --keep-stage).
   if (!process.argv.includes('--keep-stage')) {
     try {
       fs.rmSync(work, { recursive: true, force: true });
       console.log('已清理中间目录 dist/store/.stage');
-    } catch (_) { /* 被占用就留着，不影响产物 */ }
+    } catch (_) { /* Si está en uso se deja; no afecta el resultado */ }
   }
   console.log('\nAntes de subirlo a la Store, revisa la sección «Microsoft Store» del README.');
 }
@@ -455,7 +455,7 @@ function sign(file) {
   }
   const pfx = path.join(OUT_DIR, 'LanzadorAPK-test.pfx');
   const pwd = process.env.LANZADORAPK_MSIX_PFX_PASSWORD || 'LanzadorAPK!test';
-  const subject = PUBLISHER;   // 必须与清单里的 Publisher 逐字一致
+  const subject = PUBLISHER;   // Debe coincidir exactamente con el Publisher del manifiesto
   if (!fs.existsSync(pfx)) {
     console.log(`\n生成自签证书（Subject=${subject}）…`);
     const ps = [

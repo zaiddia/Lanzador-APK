@@ -1,15 +1,15 @@
 'use strict';
 /**
- * issue 反馈加固的纯 Node 测试（无需模拟器/网络/注册表）。
+ * Pruebas en Node puro del refuerzo a partir de las issues (sin emulador/red/registro).
  *
- * 覆盖本轮从 GitHub issues 汇总后落实的 5 项：
- *  - #2 P0-1：APK 包名未校验 → 任意路径写入 / adb 命令注入
- *  - #2 P0-4：provision/updater 解压无 zip-slip 防护
- *  - #2 P1-1：_fetchText 超限后 Promise 永不 settle
- *  - #51：安装版一键卸载被误判成便携版（卸载器命名两处不一致）
- *  - #98：便携版更新下载后不重启 → 死循环（复制校验假阳性 + 载荷被删）
+ * Cubre los 5 puntos aplicados en esta ronda a partir de las issues de GitHub:
+ *  - #2 P0-1: nombre de paquete del APK sin validar → escritura en cualquier ruta / inyección de comandos adb
+ *  - #2 P0-4: la descompresión de provision/updater no tenía protección contra zip-slip
+ *  - #2 P1-1: si _fetchText superaba el límite la Promise nunca se resolvía
+ *  - #51: la desinstalación con un clic de la versión instalada se tomaba como portátil (nombre del desinstalador inconsistente en dos lugares)
+ *  - #98: la versión portátil no se reiniciaba tras descargar la actualización → bucle infinito (falso positivo al verificar la copia + carga borrada)
  *
- * 运行：node test/issue-hardening-test.js
+ * Ejecutar: node test/issue-hardening-test.js
  */
 const assert = require('assert/strict');
 const fs = require('fs');
@@ -142,10 +142,10 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'lanzadorapk-hardening-'));
     const job = u.findResumableJob();
     assert.ok(job && job.version === '0.5.4', '应找回 0.5.4 的续做任务');
 
-    // 版本比当前旧 → 不复用
+    // Versión más vieja que la actual → no se reutiliza
     const cur = new Updater({ currentVersion: '0.5.4', exePath: exe, isPackaged: true, dataDir });
     assert.equal(cur.findResumableJob(), null, '不低于当前版本的载荷不能续做');
-    // 标记版本不符 → 不复用
+    // La versión marcada no coincide → no se reutiliza
     fs.writeFileSync(u._readyFile(payload), JSON.stringify({ version: '0.5.2' }));
     assert.equal(u.findResumableJob(), null, '标记版本不符不能复用');
   });

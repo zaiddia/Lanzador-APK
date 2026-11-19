@@ -1,13 +1,13 @@
 'use strict';
 /**
- * 真实 QEMU 集成测试（需要本机有 qemu-system-x86_64.exe）
+ * Prueba de integración con QEMU real (necesita qemu-system-x86_64.exe en el equipo)
  *
- * 验证内容：
- *  1. LanzadorAPK 生成的 QEMU 启动参数能被真实 QEMU 接受并稳定运行
- *  2. qemu-img 创建虚拟磁盘可用
- *  3. QEMU monitor（TCP）握手 + sendkey + 优雅退出
+ * Verifica:
+ *  1. los parámetros de arranque de QEMU que genera LanzadorAPK los acepta un QEMU real y corre estable
+ *  2. qemu-img puede crear discos virtuales
+ *  3. saludo del monitor de QEMU (TCP) + sendkey + salida ordenada
  *
- * 运行：node test/qemu-real-test.js   （没有 QEMU 时自动跳过）
+ * Ejecutar: node test/qemu-real-test.js   (sin QEMU se omite automáticamente)
  */
 const os = require('os');
 const fs = require('fs');

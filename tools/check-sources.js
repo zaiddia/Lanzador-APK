@@ -1,12 +1,12 @@
 'use strict';
 /**
- * 双源自检：一条命令看清「两个源各自的最新版本」和「每个下载地址的实测速度」。
+ * Autocomprobación de fuentes: con un comando se ve «la última versión de cada fuente» y «la velocidad medida de cada dirección de descarga».
  *
- *   node tools/check-sources.js            # 检查更新包
- *   node tools/check-sources.js runtime    # 检查运行时整包
+ *   node tools/check-sources.js            # comprueba el paquete de actualización
+ *   node tools/check-sources.js runtime    # comprueba el paquete completo del runtime
  *
- * 会真下 256KB，所以会消耗一点流量；目的是在动手改代码之前先确认
- * 「现在这台机器到底该走哪个源」。
+ * Descarga de verdad 256 KB, así que gasta algo de datos; el objetivo es confirmar antes de tocar el código
+ * «qué fuente debería usar ahora este equipo».
  */
 const fs = require('fs');
 const os = require('os');

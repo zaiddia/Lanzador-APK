@@ -1,12 +1,12 @@
 'use strict';
 /**
- * 测试用「合成 APK」构造器（只给 test/ 用，不进产品代码）。
+ * Constructor de «APK sintético» para pruebas (solo para test/, no entra en el código del producto).
  *
- * 为什么需要它：真实 APK 夹具体积大、不便随仓库分发，缺失时 axml.js / apk.js
- * 在 CI 上等于零覆盖。这里用几十行字节拼出一个**合法的**二进制 AXML 清单 +
- * 最小 ZIP，让解析栈永远有可跑的用例。
+ * Por qué hace falta: los APK reales de prueba pesan mucho y no se distribuyen bien con el repositorio; sin ellos axml.js / apk.js
+ * tendrían cero cobertura en el CI. Aquí, con unas decenas de líneas de bytes, se arma un manifiesto AXML binario **válido** +
+ * un ZIP mínimo, para que la pila de análisis siempre tenga casos que ejecutar.
  *
- * 生成的内容：
+ * Contenido generado:
  *   <manifest package="com.example.test" android:versionCode="7" android:versionName="1.2.3">
  *     <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="34"/>
  *     <application android:label="TestApp" android:icon="res/mipmap-hdpi/ic_launcher.png">
@@ -69,7 +69,7 @@ function axmlEndElement(nsIdx, nameIdx) {
   return axmlChunk(0x0103, 16, Buffer.concat([u32(0), u32(0), u32(nsIdx), u32(nameIdx)]));
 }
 
-/** 生成 AndroidManifest.xml 的二进制 AXML */
+/** Genera el AXML binario de AndroidManifest.xml */
 function buildManifestAxml() {
   const S = [
     'manifest', 'package', 'com.example.test', 'android', ANDROID_NS,
@@ -115,7 +115,7 @@ function buildManifestAxml() {
   return Buffer.concat([u16(0x0003), u16(8), u32(8 + all.length), all]);
 }
 
-/** 最小 ZIP（stored，无压缩） */
+/** ZIP mínimo (stored, sin compresión) */
 function buildStoredZip(entries) {
   const locals = [];
   const centrals = [];
@@ -153,7 +153,7 @@ function buildStoredZip(entries) {
   return Buffer.concat([...locals, cd, eocd]);
 }
 
-/** 一个可直接被 parseApk 解析的最小 APK 的字节 */
+/** Bytes de un APK mínimo que parseApk puede analizar directamente */
 function buildApkBytes() {
   const png = drawAppIcon(96);
   return buildStoredZip([

@@ -1,19 +1,19 @@
 'use strict';
 /**
- * 纯几何换算（零依赖，可在无 Electron 的 CI/Node 环境直接 require 测试）。
+ * Conversión geométrica pura (sin dependencias; se puede probar con require en CI/Node sin Electron).
  *
- * Electron 的 screen / BrowserWindow 坐标一律是 DIP（设备无关像素）；而窗口代理
- * agent.ps1 顶层声明了 per-monitor v2 DPI 感知，它调用的 Win32 SetWindowPos 收到
- * 的是物理像素。二者混用，在 125% / 150% 缩放下就是「窗口只显示一半 / 偏到角落 /
- * 点击错位」（issue #99）。嵌入模式的 _rect() 早已乘过 scaleFactor，这里把同一
- * 个换算抽出来，供独立窗口模式复用并单独测试。
+ * Las coordenadas de screen / BrowserWindow de Electron siempre son DIP (píxeles independientes del dispositivo); el agente de ventanas
+ * agent.ps1 declara arriba conciencia de DPI per-monitor v2, y el SetWindowPos de Win32 que llama recibe
+ * píxeles físicos. Mezclarlos con escalado de 125 % / 150 % produce «la ventana se ve a medias / corrida a una esquina /
+ * clics desplazados» (issue #99). El _rect() del modo incrustado ya multiplicaba por scaleFactor; aquí se extrae esa
+ * misma conversión para reutilizarla en el modo de ventana independiente y probarla por separado.
  */
 
 /**
- * 把一块 DIP 矩形换算成物理像素。
- * @param {{x:number,y:number,w:number,h:number}} rect DIP 逻辑像素矩形
- * @param {number} [scaleFactor] 缩放比；1 / 缺省时原样返回（同一对象，零开销）
- * @returns {{x:number,y:number,w:number,h:number}} 物理像素矩形
+ * Convierte un rectángulo DIP a píxeles físicos.
+ * @param {{x:number,y:number,w:number,h:number}} rect rectángulo en píxeles lógicos DIP
+ * @param {number} [scaleFactor] factor de escala; con 1 / sin indicar se devuelve tal cual (el mismo objeto, sin costo)
+ * @returns {{x:number,y:number,w:number,h:number}} rectángulo en píxeles físicos
  */
 function physicalRect(rect, scaleFactor) {
   const k = Number(scaleFactor) || 1;

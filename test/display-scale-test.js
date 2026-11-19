@@ -1,24 +1,24 @@
 'use strict';
 /**
- * issue #99「非 100% 缩放屏幕显示一半」修复的纯 Node 测试（无需 Electron/模拟器）。
+ * Pruebas en Node puro de la corrección de la issue #99 «con escala distinta de 100 % se ve la mitad» (sin Electron/emulador).
  *
- * 根因：独立窗口模式把 Electron 的 DIP 逻辑像素直接喂给 DPI-aware 进程里的
- *       SetWindowPos（收物理像素），125%/150% 缩放下窗口只有 2/3 大、位置偏移、
- *       点击错位。修复：交给 agent.layout 前用 _physical() 乘 scaleFactor。
+ * Causa: el modo de ventana independiente pasaba los píxeles lógicos DIP de Electron directamente al
+ *       SetWindowPos de un proceso DPI-aware (que espera píxeles físicos); con escala 125 %/150 % la ventana quedaba a 2/3, desplazada
+ *       y con clics desfasados. Corrección: antes de pasarlo a agent.layout se multiplica por scaleFactor con _physical().
  *
- * 覆盖：
- *  - _physical 在 100%/125%/150%/175% 下的换算（含负数坐标、四舍五入）
- *  - sf=1 / 缺省时不改变矩形
- *  - _area() 带上 sf 字段且与 area 同源
- *  - 源码级：独立窗口模式三处 layout 都经过 _physical，还原路径不重复乘
+ * Cubre:
+ *  - conversión de _physical con 100 %/125 %/150 %/175 % (incluye coordenadas negativas y redondeo)
+ *  - con sf=1 / sin valor el rectángulo no cambia
+ *  - _area() incluye el campo sf y sale de la misma fuente que area
+ *  - a nivel de código: los tres layout del modo independiente pasan por _physical y la ruta de restauración no multiplica dos veces
  *
- * 运行：node test/display-scale-test.js
+ * Ejecutar: node test/display-scale-test.js
  */
 const assert = require('assert/strict');
 const fs = require('fs');
 const path = require('path');
-// 只 require 零依赖的纯换算模块——CI 用 ELECTRON_SKIP_BINARY_DOWNLOAD=1，
-// 直接 require appwin.js 会因 electron 二进制缺失而抛错（这正是本测试最初的坑）。
+// Solo se hace require del módulo de conversión sin dependencias: el CI usa ELECTRON_SKIP_BINARY_DOWNLOAD=1,
+// y hacer require de appwin.js lanzaría un error por falta del binario de electron (justo el tropiezo inicial de esta prueba).
 const { physicalRect } = require('../src/core/geometry');
 
 let passed = 0;
@@ -53,10 +53,10 @@ function test(name, fn) {
   });
 
   test('全屏铺满：workArea DIP × sf = 物理分辨率', () => {
-    // 150% 缩放下 1920×1080 物理屏的 workArea 约 1280×693 DIP
+    // Con escala 150 %, una pantalla física de 1920×1080 tiene un workArea de unos 1280×693 DIP
     const phys = physicalRect({ x: 0, y: 0, w: 1280, h: 693 }, 1.5);
     assert.equal(phys.w, 1920);
-    assert.equal(phys.h, Math.round(693 * 1.5)); // ≈ 1040，留给任务栏
+    assert.equal(phys.h, Math.round(693 * 1.5)); // ≈ 1040, deja sitio para la barra de tareas
   });
 
   console.log('\n[源码级 · 独立窗口模式所有 layout 都接入换算]');
@@ -87,7 +87,7 @@ function test(name, fn) {
     const body = src.slice(start, src.indexOf('openDetachedLayoutOnly(area) {'));
     assert(/agent\.layout\(this\._physical\(/.test(body),
       '独立模式全屏也要换算');
-    // 还原路径用的是 probe 返回的物理像素，绝不能再乘一次
+    // La ruta de restauración usa los píxeles físicos que devuelve probe; nunca se puede multiplicar otra vez
     assert(/agent\.layout\(this\._preFullscreenRect\)/.test(body),
       '从 probe 拿到的物理矩形还原时不能重复换算');
   });

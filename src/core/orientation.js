@@ -1,25 +1,25 @@
 'use strict';
 /**
- * 屏幕方向决策（纯函数，不依赖 Electron / adb / 网络，CI 可直接 require）。
+ * Decisión de orientación de la pantalla (función pura, sin depender de Electron / adb / red; el CI puede hacer require directamente).
  *
- * 之所以把它单独抽出来：以前这条判断散落在 main.js 的三处（wantLandscapeFor、
- * 标题栏旋转按钮、托盘旋转菜单），三处各算各的「下一个方向」，基准还不一样
- * （有的看 display.landscape，有的看 appWin.state.landscape）。结果是
- * 用户点一次旋转，写进 apps.json 的覆盖值和真正切过去的面板方向相反，
- * 下次打开应用又被 wantLandscapeFor 翻回去 —— 表现就是「红果怎么都横不过来」。
- * 现在所有入口都走本模块，只有一个基准、一个结果。
+ * Por qué está aparte: antes esta decisión estaba repartida en tres lugares de main.js (wantLandscapeFor,
+ * el botón de rotación de la barra de título y el menú de rotación de la bandeja), y cada uno calculaba «la siguiente orientación» por su cuenta, con bases distintas
+ * (unos miraban display.landscape, otros appWin.state.landscape). El resultado era que
+ * al pulsar rotar una vez, el valor guardado en apps.json quedaba al revés que la orientación a la que se cambiaba de verdad,
+ * y la próxima vez wantLandscapeFor lo volvía a invertir: el síntoma era «la app no hay forma de ponerla en horizontal».
+ * Ahora todos los puntos de entrada usan este módulo: una sola base y un solo resultado.
  */
 
 const ORIENTATION_MODES = ['auto', 'landscape', 'portrait'];
 
 /**
- * 某个应用应该用横屏面板还是竖屏面板。
+ * Si una app debe usar la pantalla horizontal o vertical.
  *
- * 优先级（高 → 低）：
- *   1. 设置里的强制模式（landscape / portrait）
- *   2. 单个应用的手动覆盖（orientationOverride，由旋转按钮 / 右键菜单写入）
- *   3. APK 清单解析出的天然方向（orientation）
- *   4. 当前面板方向（声明跟随重力时不折腾重启）
+ * Prioridad (de mayor a menor):
+ *   1. el modo forzado de la configuración (landscape / portrait)
+ *   2. la sustitución manual de cada app (orientationOverride, la escriben el botón de rotación / el menú contextual)
+ *   3. la orientación natural leída del manifiesto del APK (orientation)
+ *   4. la orientación actual de la pantalla (si declara seguir la gravedad, no se reinicia para nada)
  */
 function resolveLandscape({ mode = 'auto', orientation = null, orientationOverride = null, panelLandscape = false } = {}) {
   if (mode === 'landscape') return true;
@@ -31,17 +31,17 @@ function resolveLandscape({ mode = 'auto', orientation = null, orientationOverri
   return !!panelLandscape;
 }
 
-/** 取反方向，用于旋转按钮：横 → 竖、竖 → 横 */
+/** Orientación contraria, para el botón de rotación: horizontal → vertical, vertical → horizontal */
 function flipLandscape(current) {
   return !current;
 }
 
-/** 覆盖值文本：true → 'landscape'，false → 'portrait'（写进 apps.json 的格式） */
+/** Texto de la sustitución: true → 'landscape', false → 'portrait' (el formato que se guarda en apps.json) */
 function overrideValue(landscape) {
   return landscape ? 'landscape' : 'portrait';
 }
 
-/** 从覆盖值文本读回方向；无效值返回 null（= 没有覆盖） */
+/** Lee la orientación del texto de la sustitución; un valor inválido devuelve null (= sin sustitución) */
 function parseOverride(value) {
   if (value === 'landscape') return true;
   if (value === 'portrait') return false;
@@ -49,12 +49,12 @@ function parseOverride(value) {
 }
 
 /**
- * 镜像内「自动旋转」开关默认值。
- * 虚拟机没有真实重力传感器，早先写死 accelerometer_rotation 0 让系统设置里
- * 的「自动旋转」永远是关的。现在默认打开这个开关（面板方向仍由
- * wm user-rotation lock + set-ignore-orientation-request 决定，不会被传感器带歪），
- * 这样应用自己读 Settings.System.ACCELEROMETER_ROTATION 时看到的是「开」。
- * 返回要写进 guest 的 0/1 字符串。
+ * Valor por defecto del interruptor de «rotación automática» de la imagen.
+ * La máquina virtual no tiene un sensor de gravedad real; antes se fijaba accelerometer_rotation 0 y en los ajustes del sistema
+ * la «rotación automática» siempre aparecía apagada. Ahora el interruptor viene encendido por defecto (la orientación de la pantalla la siguen decidiendo
+ * wm user-rotation lock + set-ignore-orientation-request, sin que los sensores la tuerzan),
+ * así las apps que leen Settings.System.ACCELEROMETER_ROTATION ven «activado».
+ * Devuelve la cadena 0/1 que se escribe en el invitado.
  */
 function autoRotateSetting(settings) {
   const d = (settings && settings.display) || {};

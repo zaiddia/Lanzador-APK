@@ -1,10 +1,10 @@
 'use strict';
 /**
- * 生成 Microsoft Store 截图（1920×1080，满足 1366×768 下限）
+ * Genera capturas para Microsoft Store (1920×1080, cumple el mínimo de 1366×768)
  *   node_modules/electron/dist/electron.exe build/store-shots.js
  *
- * 素材用仓库里已有的真实界面截图（docs/images），只加背景与说明文字，
- * 不修改界面本身 —— Store 要求截图反映真实 UI。
+ * Usa capturas reales de la interfaz que ya están en el repositorio (docs/images) y solo añade fondo y texto,
+ * sin modificar la interfaz: la Store exige que las capturas reflejen la interfaz real.
  */
 const { app, BrowserWindow, nativeImage } = require('electron');
 const fs = require('fs');

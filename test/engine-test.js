@@ -1,7 +1,7 @@
 'use strict';
 /**
- * 引擎与自举链路测试（不依赖真实 QEMU / adb / Android）
- * 覆盖：下载器（含断点续传）、ZIP 解压、环境检查、QEMU 启动参数、monitor 协议
+ * Pruebas del motor y de la cadena de arranque inicial (sin QEMU / adb / Android reales)
+ * Cubre: descargador (con reanudación), descompresión ZIP, comprobación del entorno, parámetros de arranque de QEMU, protocolo del monitor
  */
 const os = require('os');
 const fs = require('fs');
@@ -9,7 +9,7 @@ const path = require('path');
 const http = require('http');
 const net = require('net');
 
-// 隔离测试数据目录，避免污染真实用户配置
+// Carpeta de datos de prueba aislada, para no contaminar la configuración real del usuario
 const TMP = path.join(os.tmpdir(), `lanzadorapk-test-${Date.now()}`);
 process.env.APPDATA = TMP;
 fs.mkdirSync(path.join(TMP, 'lanzadorapk'), { recursive: true });
@@ -31,7 +31,7 @@ function assert(cond, msg) { if (!cond) throw new Error(msg || '断言失败'); 
   console.log('\n[download.js]');
   const { download, downloadParallel, head, sha256File } = require('../src/core/download');
 
-  // 本地 HTTP 服务模拟下载源（含 Range 续传）
+  // Servidor HTTP local que simula la fuente de descarga (con reanudación por Range)
   const payload = Buffer.alloc(300 * 1024);
   for (let i = 0; i < payload.length; i++) payload[i] = i % 251;
 
@@ -49,7 +49,7 @@ function assert(cond, msg) { if (!cond) throw new Error(msg || '断言失败'); 
       res.writeHead(200, { 'Content-Length': payload.length });
       return res.end(payload);
     }
-    // 完整支持 start-end 的 Range（用于并行分块测试）
+    // Soporte completo de Range start-end (para la prueba de bloques en paralelo)
     if (req.url === '/ranged.bin') {
       server.rangeHits = (server.rangeHits || 0) + 1;
       const range = /^bytes=(\d+)-(\d+)$/.exec(req.headers.range || '');
@@ -66,7 +66,7 @@ function assert(cond, msg) { if (!cond) throw new Error(msg || '断言失败'); 
       });
       return res.end(payload.subarray(start, end + 1));
     }
-    // 明确不支持 Range
+    // Sin soporte explícito de Range
     if (req.url === '/norange.bin') {
       res.writeHead(200, { 'Content-Length': payload.length, 'Accept-Ranges': 'none' });
       return res.end(payload);
@@ -157,7 +157,7 @@ function assert(cond, msg) { if (!cond) throw new Error(msg || '断言失败'); 
     const p = new Provisioner(path.join(TMP, 'nonexistent'));
     const env = await p.checkEnv();
     assert(env.adb.ok === false, 'adb 不应就绪');
-    // QEMU 可能已被系统级安装（如 winget 到 Program Files），此时应当被发现
+    // QEMU puede estar instalado a nivel de sistema (p. ej. con winget en Program Files); entonces debe encontrarse
     if (env.qemu.ok) assert(env.qemu.version, 'qemu 就绪时必须带版本号');
     assert(env.ready === false, '不应就绪');
     assert(typeof env.hypervisor.whpx === 'boolean', '缺少超管信息');
@@ -165,7 +165,7 @@ function assert(cond, msg) { if (!cond) throw new Error(msg || '断言失败'); 
 
   await test('内置 ZIP 解压可用', async () => {
     const { ZipArchive } = require('../src/core/zip');
-    // 构造一个 stored 模式的最小 zip
+    // Construye un zip mínimo en modo stored
     const name = Buffer.from('platform-tools/adb.exe');
     const data = Buffer.from('fake-adb-binary');
     const loc = Buffer.alloc(30);
@@ -196,15 +196,15 @@ function assert(cond, msg) { if (!cond) throw new Error(msg || '断言失败'); 
 
   await test('SDK 索引里的相对 url 会被补全成绝对地址', async () => {
     const { absUrl, baseOf, SOURCES } = require('../src/core/provision');
-    // repository2-3.xml（emulator）相对仓库根
+    // repository2-3.xml (emulator) relativo a la raíz del repositorio
     assert(absUrl('emulator-windows_x64-16847572.zip') === `${baseOf(SOURCES.sdkIndex)}emulator-windows_x64-16847572.zip`,
       'emulator 相对路径未补全');
-    // sys-img 索引相对 sys-img/android/，不能错拼到仓库根
+    // El índice sys-img es relativo a sys-img/android/; no debe unirse por error a la raíz del repositorio
     const sysBase = baseOf(SOURCES.sysImgIndexes[0]);
     assert(sysBase.endsWith('/sys-img/android/'), `sys-img 基准目录异常: ${sysBase}`);
     assert(absUrl('x86_64-30_r11.zip', sysBase) === 'https://dl.google.com/android/repository/sys-img/android/x86_64-30_r11.zip',
       'sys-img 相对路径补全错误');
-    // 绝对地址原样返回
+    // Las direcciones absolutas se devuelven tal cual
     assert(absUrl('https://example.com/a.zip') === 'https://example.com/a.zip', '绝对地址被改写');
   });
 
@@ -319,7 +319,7 @@ function assert(cond, msg) { if (!cond) throw new Error(msg || '断言失败'); 
   });
 
   await test('QEMU monitor 协议：握手并下发命令', async () => {
-    // 模拟 QEMU monitor：连上后回 "(qemu) "，收到命令后回 ok
+    // Simula el monitor de QEMU: al conectar responde "(qemu) " y al recibir un comando responde ok
     const srv = net.createServer((sock) => {
       sock.write('QEMU 8.2.0 monitor - type \'help\' for more information\r\n(qemu) ');
       sock.on('data', (d) => {
@@ -338,7 +338,7 @@ function assert(cond, msg) { if (!cond) throw new Error(msg || '断言失败'); 
   await test('未安装系统时 ensure 返回 needsSetup', async () => {
     store.saveSettings({ runtime: { installed: false }, engine: { mode: 'builtin' } });
     const rt = new Runtime(TMP);
-    // 用假 adb 保证 isOnline 快速失败
+    // Con un adb falso isOnline falla rápido
     const r = await rt.ensure({ onLog: () => {} });
     assert(r.ok === false, '不应就绪');
     assert(['provision', 'install'].includes(r.needsSetup), `needsSetup=${r.needsSetup}`);
@@ -354,7 +354,7 @@ function assert(cond, msg) { if (!cond) throw new Error(msg || '断言失败'); 
       await new Promise((r) => setTimeout(r, 60));
       return { ok: true, engine: 'emulator' };
     };
-    // 预热（启动 4 秒后自动跑）与用户点开应用（ensure）会同时发生
+    // El precalentamiento (se ejecuta solo a los 4 s de iniciar) y que el usuario abra una app (ensure) ocurren a la vez
     const [a, b] = await Promise.all([rt.prewarm({}), rt.ensure({})]);
     assert(calls === 1, `底层开机被触发 ${calls} 次，应只拉起一台模拟器`);
     assert(a && a.ok && b && b.ok, '两条路径都应拿到就绪结果');

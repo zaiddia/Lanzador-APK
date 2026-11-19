@@ -1,5 +1,5 @@
 'use strict';
-/* 应用窗口标题栏：只有 旋转 / 最小化 / 最大化 / 关闭，其余设置都在 LanzadorAPK 主界面 */
+/* Barra de título de la ventana de app: solo rotar / minimizar / maximizar / cerrar; el resto de la configuración está en la ventana principal de LanzadorAPK */
 const api = window.lanzadorapk;
 const $ = (id) => document.getElementById(id);
 
@@ -15,18 +15,18 @@ btn.min.addEventListener('click', () => api.shell.minimize());
 btn.max.addEventListener('click', () => api.shell.maximize());
 btn.close.addEventListener('click', () => api.shell.close());
 
-// 标题栏上右键不要弹出 Chromium 的网页菜单；画面区域的右键已由主进程
-// 拦下并映射成「安卓返回」，这里补掉外壳这一圈。
+// El clic derecho en la barra de título no debe mostrar el menú web de Chromium; el clic derecho en la imagen ya lo intercepta el proceso principal
+// y lo convierte en «atrás» de Android; aquí se cubre el borde de la ventana contenedora.
 window.addEventListener('contextmenu', (e) => e.preventDefault());
 
-// Ctrl+R 旋转，F11 最大化（和 Windows 习惯一致）
+// Ctrl+R rota, F11 maximiza (como es habitual en Windows)
 window.addEventListener('keydown', (e) => {
   if (e.ctrlKey && (e.key === 'r' || e.key === 'R')) { e.preventDefault(); api.shell.rotate(); }
   else if (e.key === 'F11') { e.preventDefault(); api.shell.maximize(); }
   else if (e.altKey && e.key === 'ArrowLeft') { e.preventDefault(); api.shell.back(); }
   else if (e.altKey && e.key === 'ArrowRight') { e.preventDefault(); api.shell.forward(); }
   else {
-    // 其余按键转发给主进程的按键映射引擎（游戏手柄/键盘→触屏）
+    // Las demás teclas se envían al motor de asignación de teclas del proceso principal (control/teclado → pantalla táctil)
     api.shell.keyEvent(e.key).catch(() => {});
   }
 });

@@ -1,5 +1,5 @@
 'use strict';
-// 桌面截图探针（不依赖 PowerShell）：electron test/cap.js out.png
+// Sonda de captura del escritorio (sin depender de PowerShell): electron test/cap.js out.png
 const { app, desktopCapturer, screen } = require('electron');
 const fs = require('fs');
 const path = require('path');

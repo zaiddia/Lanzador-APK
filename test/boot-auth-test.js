@@ -1,15 +1,15 @@
 'use strict';
 /**
- * 开机授权 / 安装校验的纯 Node 测试（不需要真实模拟器、不需要网络）。
+ * Pruebas en Node puro de la autorización de arranque / verificación de instalación (sin emulador real ni red).
  *
- * 覆盖 0.5.3 两个真实故障的根因修复：
- *  1) 快照在「允许 USB 调试」对话框未确认时拍下 → 每次恢复都 device unauthorized →
- *     探测干等 240s×4 还被误诊成显卡问题。修复：识别 unauthorized、作废旧快照冷启动、
- *     健康时才存快照。
- *  2) PackageManager 报 installed=true，但 /data/app 文件已被快照/数据不一致弄丢 →
- *     am start 失败。修复：isInstalled 逐个核对 APK 文件真实存在。
+ * Cubren la corrección de raíz de dos fallos reales de la 0.5.3:
+ *  1) la instantánea se tomaba con el diálogo «Permitir depuración USB» sin confirmar → cada restauración daba device unauthorized →
+ *     la detección esperaba 240 s × 4 y se diagnosticaba mal como problema de GPU. Corrección: detectar unauthorized, invalidar la instantánea y arrancar en frío,
+ *     y solo guardar instantáneas con el sistema sano.
+ *  2) PackageManager decía installed=true pero los archivos de /data/app se habían perdido por la incoherencia instantánea/datos →
+ *     am start fallaba. Corrección: isInstalled comprueba que cada archivo APK exista de verdad.
  *
- * 运行：node test/boot-auth-test.js
+ * Ejecutar: node test/boot-auth-test.js
  */
 const assert = require('assert/strict');
 const fs = require('fs');
@@ -70,7 +70,7 @@ const adbDevices = (line) => `List of devices attached\n${line}\n`;
     const c = Object.create(AdbClient.prototype);
     c.shell = async (cmd) => {
       if (cmd.startsWith('pm path')) return 'package:/data/app/~~x/com.foo-1/base.apk';
-      // 文件校验命令：文件丢了，没有 PRESENT 回显
+      // Comando de verificación de archivos: el archivo se perdió, no hay eco PRESENT
       return '';
     };
     assert.equal(await c.isInstalled('com.foo'), false);
@@ -91,7 +91,7 @@ const adbDevices = (line) => `List of devices attached\n${line}\n`;
         return 'package:/data/app/~~x/com.foo/base.apk\npackage:/data/app/~~x/com.foo/split.apk';
       }
       seen.push(cmd);
-      return ''; // 两个 [ -s ] 都失败
+      return ''; // Fallan los dos [ -s ]
     };
     assert.equal(await c.isInstalled('com.foo'), false);
     assert.ok(seen.some((s) => s.includes('/data/app/~~x/com.foo/split.apk')), '校验命令要覆盖每个分片');
@@ -100,23 +100,23 @@ const adbDevices = (line) => `List of devices attached\n${line}\n`;
   console.log('\n[快照保存守卫]');
   await atest('adb unauthorized → 不存快照', async () => {
     const emu = Object.create(require('../src/core/emulator').EmulatorEngine.prototype);
-    emu.port = 5554; // serial 是 getter：emulator-${port}
-    emu._log = [];   // log() 会往里 push
+    emu.port = 5554; // serial es un getter: emulator-${port}
+    emu._log = [];   // log() agrega elementos aquí
     emu._adbGuestHealthy = async () => false;
     const ok = await emu._saveViaAdb('adb');
     assert.equal(ok, false, '不健康时不允许保存');
   });
   await atest('源码级：快照保存路径必须先过健康守卫', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'core', 'emulator.js'), 'utf8');
-    const fn = src.slice(src.indexOf('async _saveViaAdb('), src.indexOf('async _saveViaAdb(') + 700);
+    const fn = src.slice(src.indexOf('async _saveViaAdb('), src.indexOf('async _saveViaAdb(') + 1800);
     assert.ok(/_adbGuestHealthy/.test(fn), '_saveViaAdb 必须先判 guest 健康');
-    const stopFn = src.slice(src.indexOf('async stop('), src.indexOf('async stop(') + 2400);
+    const stopFn = src.slice(src.indexOf('async stop('), src.indexOf('async stop(') + 6000);
     assert.ok(/_adbGuestHealthy/.test(stopFn), 'stop() 关机前也要判断健康');
     assert.ok(/invalidateSnapshot\(\)/.test(stopFn), '不健康关机要作废快照');
   });
   await atest('源码级：开机探测要识别 unauthorized 并冷启动自愈', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'core', 'engine.js'), 'utf8');
-    const boot = src.slice(src.indexOf('async bootEmulator('), src.indexOf('async bootEmulator(') + 4200);
+    const boot = src.slice(src.indexOf('async bootEmulator('), src.indexOf('async bootEmulator(') + 10000);
     assert.ok(/isUnauthorizedError/.test(boot), '探测要按报错文本识别 unauthorized');
     assert.ok(/deviceState\(\)/.test(boot), '探测要按 devices state 列二次确认');
     assert.ok(/invalidateSnapshot\(\)/.test(boot), '命中授权卡住要作废旧快照');

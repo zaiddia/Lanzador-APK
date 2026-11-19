@@ -1,12 +1,12 @@
 'use strict';
 /**
- * 便携版打包：产出 dist/LanzadorAPK-win64-portable/
- *   LanzadorAPK.exe（electron.exe 改名 + 写入图标/版本资源）+ resources/app（本应用源码）
- * 无需安装器，解压即用。
+ * Empaquetado portátil: genera dist/LanzadorAPK-win64-portable/
+ *   LanzadorAPK.exe (electron.exe renombrado + icono y recursos de versión) + resources/app (código de la app)
+ * No necesita instalador; se descomprime y se usa.
  *
- * --full（或 LANZADORAPK_PACK_FULL=1）时产出「完整版」：
- *   额外把 build/runtime 复制进 resources/runtime，解压即用、首次启动不需要下载任何东西。
- *   输出目录默认 dist/LanzadorAPK-v<版本>-win64-full，不会覆盖轻量版。
+ * Con --full (o LANZADORAPK_PACK_FULL=1) genera la «versión completa»:
+ *   copia además build/runtime a resources/runtime; se descomprime y funciona sin descargar nada en el primer arranque.
+ *   La carpeta de salida por defecto es dist/LanzadorAPK-v<versión>-win64-full y no sobrescribe la versión ligera.
  */
 const fs = require('fs');
 const path = require('path');
@@ -16,16 +16,16 @@ const { assertStandalone } = require('./guard-standalone');
 const ROOT = path.join(__dirname, '..');
 const PKG = require(path.join(ROOT, 'package.json'));
 const FULL = process.argv.includes('--full') || process.env.LANZADORAPK_PACK_FULL === '1';
-// 允许指定输出目录（用于目标目录被正在运行的实例占用时，先构建到别处再替换）
+// Permite indicar la carpeta de salida (por si la de destino la ocupa una instancia en ejecución: compilar en otro lugar y luego reemplazar)
 let OUT = process.env.LANZADORAPK_PACK_OUT
   ? path.resolve(process.env.LANZADORAPK_PACK_OUT)
   : path.join(ROOT, 'dist', FULL ? `LanzadorAPK-v${PKG.version}-win64-full` : 'LanzadorAPK-win64-portable');
 const ELECTRON_DIST = path.join(ROOT, 'node_modules', 'electron', 'dist');
 
-// Windows 上 fs.cpSync 复制「大量小文件 + 大镜像」的目录树时会偶发
-// EINPROGRESS（Node 错误地报成 "not enough space on the disk"，实际磁盘还剩上百 G）。
-// 改用逐文件 copyFileSync 的朴素递归：慢一点点，但每个文件都是独立 syscall，
-// 不会被目录树级的竞态打断，也不会像 robocopy 那样在受管 shell 下挂起。
+// En Windows, fs.cpSync al copiar un árbol con «muchos archivos pequeños + imágenes grandes» a veces da
+// EINPROGRESS (Node lo reporta mal como "not enough space on the disk", aunque queden cientos de GB).
+// Se usa una recursión simple con copyFileSync archivo por archivo: un poco más lenta, pero cada archivo es una llamada independiente,
+// no la interrumpen carreras a nivel de árbol y no se cuelga en shells administrados como robocopy.
 function copy(src, dest) {
   const st = fs.statSync(src);
   if (st.isDirectory()) {
@@ -40,29 +40,29 @@ function copy(src, dest) {
 }
 
 console.log(FULL ? '打包完整版（含运行时）→' : '打包便携版 →', OUT);
-// 目标已存在时不做整树删除：部分环境会拦截批量删除，且打包中途失败会丢掉
-// 上一个可用版本。改为先把旧目录改名保留，再全新构建；占用中则自动换目录。
+// Si el destino existe no se borra entero: algunos entornos bloquean borrados masivos y si el empaquetado falla a mitad se pierde
+// la última versión útil. Se renombra la carpeta antigua para conservarla y se compila desde cero; si está en uso se cambia de carpeta.
 if (fs.existsSync(OUT)) {
   try {
     const backup = `${OUT}.prev-${new Date().toISOString().replace(/[:.]/g, '-')}`;
     fs.renameSync(OUT, backup);
     console.log('旧版本已保留 →', backup);
   } catch (_) {
-    // 某些环境（杀软 / 搜索索引 / 资源管理器）会长时间持有目录句柄，
-    // 整目录改名必然 EBUSY；这时退到带版本号的目录，产物一样可用且不再重名。
+    // Algunos entornos (antivirus / indexador / Explorador) retienen el identificador de la carpeta mucho tiempo,
+    // y renombrarla da EBUSY; entonces se usa una carpeta con número de versión: el resultado sirve igual y no choca de nombre.
     OUT = path.join(ROOT, 'dist', `LanzadorAPK-v${require(path.join(ROOT, 'package.json')).version}-win64-portable`);
     console.log('旧目录被占用，改输出到 →', OUT);
   }
 }
 fs.mkdirSync(path.join(OUT, 'resources', 'app'), { recursive: true });
 
-// 1. Electron 运行时
+// 1. Runtime de Electron
 console.log('复制 Electron 运行时…');
 copy(ELECTRON_DIST, OUT);
 fs.rmSync(path.join(OUT, 'resources', 'default_app.asar'), { force: true });
 
-// 1.1 语言包瘦身：Electron 自带 55 种语言，合计 41MB，我们只用中文界面。
-//     只留 zh-CN / zh-TW / en-US，其余删掉（-39MB，等于整包小 15%）。
+// 1.1 Reducción de idiomas: Electron trae 55 idiomas (41 MB en total) y la interfaz solo usa español.
+//     Solo se conservan es / es-419 / en-US; el resto se borra (-39 MB, un 15 % menos de paquete).
 const KEEP_LOCALES = new Set(['es.pak', 'es-419.pak', 'en-US.pak']);
 let localeSaved = 0;
 try {
@@ -72,29 +72,29 @@ try {
     localeSaved += (() => { try { return fs.statSync(path.join(locDir, f)).size; } catch (_) { return 0; } })();
     fs.rmSync(path.join(locDir, f), { force: true });
   }
-} catch (_) { /* 没有 locales 目录也不影响 */ }
+} catch (_) { /* Si no existe la carpeta locales no pasa nada */ }
 
-// 1.2 没人会点开的文件：更新日志、调试符号、部分无用的 pak（各自 0.1~9MB）
+// 1.2 Archivos que nadie abre: registros de cambios, símbolos de depuración, algunos pak inútiles (0,1–9 MB cada uno)
 for (const rel of ['LICENSES.chromium.html.bak', 'vk_swiftshader_icd.json.bak']) {
   fs.rmSync(path.join(OUT, rel), { force: true });
 }
 
-// 1.3 可省掉的运行库：
-//     d3dcompiler_47.dll 负责把 ANGLE 的 HLSL 编成 GPU 指令，但 Windows 8.1 起
-//     System32 里就自带同名 DLL，LoadLibrary 找不到包内那份会自然用系统的。
-//     实测删掉后界面/图标/字体渲染完全正常（--smoke 截图对比无差异）。压紧 2.1MB。
-//     注意：vk_swiftshader.dll / vulkan-1.dll 不能删 —— GPU 驱动不可用时 Chromium
-//     靠它做软件兜底，删了会白屏。
+// 1.3 Librerías que se pueden quitar:
+//     d3dcompiler_47.dll compila el HLSL de ANGLE a instrucciones de GPU, pero desde Windows 8.1
+//     System32 trae una DLL con el mismo nombre; si LoadLibrary no encuentra la del paquete usa la del sistema.
+//     Probado: sin ella la interfaz, los iconos y las fuentes se ven igual (sin diferencias en las capturas --smoke). Ahorra 2,1 MB comprimido.
+//     Atención: vk_swiftshader.dll / vulkan-1.dll no se pueden borrar: si el controlador de GPU no sirve, Chromium
+//     los usa como respaldo por software; sin ellos la pantalla queda en blanco.
 let pruneSaved = 0;
 for (const rel of ['d3dcompiler_47.dll']) {
   const p = path.join(OUT, rel);
   try {
     pruneSaved += fs.statSync(p).size;
     fs.rmSync(p, { force: true });
-  } catch (_) { /* 本来就没有 */ }
+  } catch (_) { /* Ya no existía */ }
 }
 
-// 2. 应用本体
+// 2. La app
 // assets/ (si existe) contiene recursos que se distribuyen con la app.
 console.log('复制应用…');
 const appDir = path.join(OUT, 'resources', 'app');
@@ -103,13 +103,13 @@ for (const item of ['package.json', 'src', 'assets', 'LICENSE']) {
   if (fs.existsSync(src)) copy(src, path.join(appDir, item));
 }
 
-// 2.1 生产依赖（原生模块）：只复制 src/ 是不够的 —— 运行时 npm 依赖也得带上。
-// 典型受害者：@napi-rs/lzma 负责解压 system.img.xz / vendor.img.xz，
-// 它在 package.json 的 dependencies 里，而旧版 pack.js 从不复制 node_modules。
-// 结果就是「装完点应用没反应」：镜像展开时抛 Cannot find module '@napi-rs/lzma'，
-// 运行时起不来，四种参数组合全部 boot-failed。0.5.9 的致命回归就是这么来的。
-// 作用域包（@scope/name）连整个 scope 一起复制，因为原生二进制
-// 通常作为 optionalDependency 挂在同 scope 下（如 @napi-rs/lzma-win32-x64-msvc）。
+// 2.1 Dependencias de producción (módulos nativos): copiar solo src/ no basta; también hay que llevar las dependencias npm de ejecución.
+// Caso típico: @napi-rs/lzma descomprime system.img.xz / vendor.img.xz,
+// está en dependencies de package.json y el pack.js anterior nunca copiaba node_modules.
+// El resultado era «instalada pero al abrir una app no pasa nada»: al descomprimir la imagen salía Cannot find module '@napi-rs/lzma',
+// el runtime no arrancaba y las cuatro combinaciones de parámetros terminaban en boot-failed. Así se produjo la regresión grave de 0.5.9.
+// Los paquetes con ámbito (@scope/name) se copian con todo el ámbito, porque los binarios nativos
+// suelen estar como optionalDependency en el mismo ámbito (p. ej. @napi-rs/lzma-win32-x64-msvc).
 const prodDeps = Object.keys((require(path.join(ROOT, 'package.json')).dependencies) || {});
 if (prodDeps.length) {
   console.log(`复制生产依赖（${prodDeps.length}）：${prodDeps.join(', ')}`);
@@ -126,10 +126,10 @@ if (prodDeps.length) {
   }
 }
 
-// 3. 可选目录
-// engine/ 下只有文档类内容随包分发；大体积运行时组件（emulator、system-images、
-// platform-tools、avd）由应用首次启动时自动从官方源下载，不进安装包。
-// tools/ 是开发期自检脚本（黑窗实测、测速），用户用不到，不再随包分发。
+// 3. Carpetas opcionales
+// De engine/ solo se distribuye la documentación; los componentes grandes del runtime (emulator, system-images,
+// platform-tools, avd) los descarga la app desde la fuente oficial en el primer arranque y no van en el instalador.
+// tools/ son scripts de comprobación para desarrollo (ventanas negras, velocidad); el usuario no los usa y ya no se distribuyen.
 const ENGINE_SKIP = new Set(['emulator', 'system-images', 'platform-tools', 'avd', 'aehd', '_dl', 'qemu']);
 for (const opt of ['engine']) {
   const src = path.join(ROOT, opt);
@@ -142,7 +142,7 @@ for (const opt of ['engine']) {
   }
 }
 
-// 3.5 完整版：把运行时（emulator + platform-tools + 系统镜像）也放进去
+// 3.5 Versión completa: incluye también el runtime (emulator + platform-tools + imagen del sistema)
 if (FULL) {
   const runtime = path.join(ROOT, 'build', 'runtime');
   const runtimeExe = path.join(runtime, 'emulator', 'emulator.exe');
@@ -152,14 +152,14 @@ if (FULL) {
     process.exit(1);
   }
   console.log('内置运行时（约 1 GB，需要一会儿）…');
-  // 运行时目录里可能残留开发期的垃圾：userdata.img.broken（上次展开失败留下的）、
-  // *.part（解压中断）、*.new（正在重压的临时文件）。这些既占体积又没有任何用，
-  // 甚至会把一份坏镜像带进发行包 —— 直接跳过，不要复制。
-  // 打包前先验一遍 .img.xz 是否完整：截断的 xz 在解压到一半才会炸
-  // ("failed to fill whole buffer")，而那时用户已经装完软件了 —— 表现就是
-  // 「装了但什么应用都打不开」。0.5.9 就是被一份截断的 system.img.xz 坑的
-  // （495MB 只解出 1366MB / 应 2958MB）。xz 流结束时一定有 footer，
-  // 末尾 8 字节里能找到 "YZ"；找不到就是没写完。
+  // La carpeta del runtime puede tener restos de desarrollo: userdata.img.broken (de una descompresión fallida),
+  // *.part (descompresión interrumpida), *.new (temporal de una recompresión). Ocupan espacio y no sirven,
+  // e incluso podrían meter una imagen dañada en la versión publicada; se omiten, no se copian.
+  // Antes de empaquetar se verifica que los .img.xz estén completos: un xz truncado solo falla a mitad de la descompresión
+  // ("failed to fill whole buffer"), y para entonces el usuario ya instaló el programa; el síntoma es
+  // «instalado pero ninguna app abre». A la 0.5.9 la afectó un system.img.xz truncado
+  // (495 MB que solo daban 1366 MB de los 2958 MB esperados). Un flujo xz completo siempre termina con un pie
+  // y en los últimos 8 bytes aparece "YZ"; si no está, no se terminó de escribir.
   const walkXz = (dir) => {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
       const p = path.join(dir, e.name);
@@ -181,7 +181,7 @@ if (FULL) {
     }
   };
   walkXz(runtime);
-  // 注意 .pynew 是重压临时文件（python 版），和 .new 一样必须排除。
+  // Ojo: .pynew es el temporal de recompresión (versión python) y, como .new, debe excluirse.
   const JUNK = /(\.broken|\.part|\.new|\.pynew|\.tmp|\.bak)$/i;
   const copyRuntime = (src, dest) => {
     const st = fs.statSync(src);
@@ -199,25 +199,25 @@ if (FULL) {
   copyRuntime(runtime, path.join(OUT, 'resources', 'runtime'));
 }
 
-// 3.6 独立运行守卫：产物里不许出现 MuMu / 雷电 / 蓝叠等第三方模拟器。
-// 命中就让构建失败 —— 这类问题只会在「别人的电脑」上暴露，本地永远测不出来。
+// 3.6 Vigilante de independencia: el resultado no puede contener MuMu / LDPlayer / BlueStacks u otros emuladores de terceros.
+// Si hay coincidencia la compilación falla: estos problemas solo aparecen «en el equipo de otro» y localmente nunca se detectan.
 assertStandalone(path.join(OUT, 'resources'), { label: '便携版 resources' });
 
-// 4. 改名主程序
+// 4. Renombrar el ejecutable principal
 const exePath = path.join(OUT, 'LanzadorAPK.exe');
 fs.renameSync(path.join(OUT, 'electron.exe'), exePath);
 
 /**
- * 给 LanzadorAPK.exe 写入图标与版本资源。
+ * Escribe el icono y los recursos de versión en LanzadorAPK.exe.
  *
- * 为什么必须做：直改名出来的 exe 里面还是 Electron 的东西 ——
- * FileDescription=Electron、ProductName=Electron、CompanyName=GitHub, Inc.、
- * 版本号 33.4.11，图标也是 Electron 的。于是资源管理器、任务栏固定项、
- * 快捷方式属性、杀软/系统信息里全显示「Electron」和默认图标，
- * 用户看到的就是「图标是默认的」。
+ * Por qué es necesario: un exe solo renombrado sigue siendo Electron por dentro:
+ * FileDescription=Electron, ProductName=Electron, CompanyName=GitHub, Inc.,
+ * versión 33.4.11 y el icono de Electron. Así el Explorador, los anclajes de la barra de tareas,
+ * las propiedades de los accesos directos y el antivirus/información del sistema muestran «Electron» y el icono por defecto,
+ * y el usuario ve «el icono por defecto».
  *
- * rcedit 是 electron-builder / electron-winstaller 用的同一个工具，
- * 这里直接用 node_modules 里现成的那份，不需要联网。
+ * rcedit es la misma herramienta que usan electron-builder / electron-winstaller;
+ * aquí se usa la copia de node_modules, sin necesidad de internet.
  */
 function embedExeMeta(exe) {
   const rcedit = [
@@ -236,7 +236,7 @@ function embedExeMeta(exe) {
   const args = [
     exe,
     '--set-icon', ico,
-    // 四段式文件版本（和 MSIX 的口径一致），产品版本用三段式
+    // Versión de archivo de cuatro partes (igual que MSIX); la versión de producto usa tres
     '--set-file-version', `${PKG.version}.0`,
     '--set-product-version', PKG.version,
     '--set-version-string', 'ProductName', 'LanzadorAPK',
@@ -257,13 +257,13 @@ function embedExeMeta(exe) {
 }
 embedExeMeta(exePath);
 
-// 5. 版本信息
+// 5. Información de versión
 const pkg = PKG;
 const fullNote = FULL ? '完整版（内置运行时，装完不联网）' : '轻量版（首次启动下载运行时）';
 fs.writeFileSync(path.join(OUT, 'VERSION.txt'),
   `LanzadorAPK ${pkg.version}\n${fullNote}\n构建时间：${new Date().toLocaleString('es')}\n`);
 
-// 6. 体积报告：每次打包都打印，避免以后又悄悄变胖
+// 6. Informe de tamaño: se imprime en cada empaquetado para que no vuelva a crecer sin darnos cuenta
 function dirSize(dir) {
   let n = 0;
   try {

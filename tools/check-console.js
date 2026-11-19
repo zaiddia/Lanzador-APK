@@ -1,11 +1,11 @@
 'use strict';
 /**
- * 黑窗验证：按主进程的方式拉起 emulator，检查「命令栏黑窗」是否被窗口代理压住。
+ * Verificación de ventanas negras: lanza emulator igual que el proceso principal y comprueba si el agente de ventanas suprime la «ventana negra de consola».
  *
- * 只靠代码推断不可靠 —— 控制台窗口属于 conhost.exe，pid 和 emulator 完全对不上，
- * 必须真的枚举一次可见窗口才算数。
+ * Deducirlo solo del código no es fiable: la ventana de consola pertenece a conhost.exe y su pid no coincide en nada con emulator;
+ * solo cuenta enumerar de verdad las ventanas visibles.
  *
- * 用法: node tools/check-console.js [appRoot]
+ * Uso: node tools/check-console.js [appRoot]
  */
 const path = require('path');
 const { spawn } = require('child_process');
@@ -32,7 +32,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const before = await list();
   console.log('启动前可见控制台窗口:', JSON.stringify(before));
 
-  // 与主进程完全一致：detached + windowsHide + pipe
+  // Igual que el proceso principal: detached + windowsHide + pipe
   const proc = spawn(EMU, [
     '-avd', 'lanzadorapk', '-port', '5554', '-no-boot-anim', '-no-metrics',
     '-crash-report-mode', 'disabled', '-gpu', 'swangle', '-memory', '3072',

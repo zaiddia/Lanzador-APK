@@ -1,22 +1,22 @@
 'use strict';
 /**
- * 底座嵌入探针（开发用，不打进发行版）
+ * Sonda de incrustación de bases (para desarrollo, no va en la distribución)
  *
- * 目的：在真实 Electron 窗口里验证「第三方底座的画面窗口能不能嵌进来」，
- * 不用打开主界面、不用装应用，方便改一版跑一次。
+ * Objetivo: verificar en una ventana de Electron real si «la ventana de imagen de una base de terceros se puede incrustar»,
+ * sin abrir la interfaz principal ni instalar apps, para probar rápido tras cada cambio.
  *
- * 为什么单独做一个极小的 Electron 应用（tools/embed-probe/）：
- * electron.exe 只把「目录（带 package.json）」当成 app，直接传 .js 不会跑。
+ * Por qué es una app de Electron mínima aparte (tools/embed-probe/):
+ * electron.exe solo trata como app una «carpeta (con package.json)»; pasarle un .js directamente no lo ejecuta.
  *
- * 用法：
+ * Uso:
  *   set LANZADORAPK_BACKEND=mumu  &  node_modules\electron\dist\electron.exe tools\embed-probe
- *   注意必须清掉 ELECTRON_RUN_AS_NODE（某些环境会设成 1，那样 electron 只当 node 用）。
+ *   Ojo: hay que quitar ELECTRON_RUN_AS_NODE (algunos entornos lo ponen en 1 y entonces electron funciona solo como node).
  *
- * 做的事：
- *   1. 按 id 建后端实例，ensure() 开机；
- *   2. 等窗口就绪（windowReady）；
- *   3. 用和正式代码同一条路径（WinAgent.embed，带 targets）嵌进一个宿主窗口；
- *   4. 截图存到 .probe/embed-probe-<id>.png，然后退出。
+ * Lo que hace:
+ *   1. crea la instancia del backend por id y la arranca con ensure();
+ *   2. espera a que la ventana esté lista (windowReady);
+ *   3. la incrusta en una ventana anfitriona por la misma ruta que el código real (WinAgent.embed, con targets);
+ *   4. guarda una captura en .probe/embed-probe-<id>.png y sale.
  */
 const { BrowserWindow } = require('electron');
 const fs = require('fs');
@@ -30,7 +30,7 @@ function outDir() {
   return OUT_DIR;
 }
 
-/** 结果同时写文件：Electron 主进程的 stdout 在不少启动方式下抓不到 */
+/** El resultado también se escribe en un archivo: el stdout del proceso principal de Electron no se puede capturar en muchas formas de inicio */
 function log(m) {
   const line = `[probe] ${m}\n`;
   try { fs.appendFileSync(path.join(outDir(), 'probe.log'), line); } catch (_) { /* ignore */ }
@@ -42,7 +42,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function run(appRoot) {
   try { fs.writeFileSync(path.join(outDir(), 'probe.log'), ''); } catch (_) { /* ignore */ }
 
-  // 这里才 require Electron 侧的东西：入口文件先跑过 app.whenReady() 了
+  // Solo aquí se hace require de lo del lado de Electron: el archivo de entrada ya ejecutó app.whenReady()
   const backends = require(path.join(appRoot, 'src', 'core', 'backends'));
   const { WinAgent } = require(path.join(appRoot, 'src', 'core', 'agent'));
 

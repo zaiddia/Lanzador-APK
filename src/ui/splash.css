@@ -1,4 +1,4 @@
-/* LanzadorAPK 开机动画 —— 仿抖音 DSH 简洁品牌风格 */
+/* Animación de arranque de LanzadorAPK: estilo de marca sencillo y limpio */
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -8,7 +8,7 @@ html, body {
   font-family: -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif;
   background: #0b0c0e;
   color: #e8eaed;
-  -webkit-app-region: drag;   /* 整个窗口可拖动 */
+  -webkit-app-region: drag;   /* Toda la ventana se puede arrastrar */
   user-select: none;
 }
 
@@ -17,7 +17,7 @@ html, body {
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
   position: relative;
-  /* 微妙渐变背景 */
+  /* Fondo con un degradado sutil */
   background:
     radial-gradient(ellipse 80% 60% at 50% 40%, rgba(15, 157, 99, .08), transparent 70%),
     radial-gradient(ellipse 60% 50% at 80% 80%, rgba(18, 184, 134, .05), transparent 60%),
@@ -51,7 +51,7 @@ html, body {
   letter-spacing: .3px;
 }
 
-/* ---- 进度条 ---- */
+/* ---- Barra de progreso ---- */
 .progress-wrap {
   margin-top: 36px;
   width: 280px; height: 3px;
@@ -68,7 +68,7 @@ html, body {
   transition: width .4s ease;
 }
 
-/* ---- 状态文字 ---- */
+/* ---- Texto de estado ---- */
 .status {
   margin-top: 14px;
   font-size: 12.5px; color: #93a19a;
@@ -77,7 +77,7 @@ html, body {
   transition: opacity .3s;
 }
 
-/* ---- 首次安装提示 ---- */
+/* ---- Aviso de primera instalación ---- */
 .first-run {
   margin-top: 28px;
   padding: 16px 24px;
@@ -106,19 +106,19 @@ html, body {
   color: #0f9d63;
 }
 
-/* ---- 底部 ---- */
+/* ---- Pie ---- */
 .footer {
   position: absolute; bottom: 16px;
   font-size: 11px; color: #4a5550;
   animation: fadeUp .8s ease-out .9s both;
 }
 
-/* ---- 淡出 ---- */
+/* ---- Desvanecer ---- */
 .splash.out {
   animation: fadeOut .5s ease-in forwards;
 }
 
-/* ---- 动画关键帧 ---- */
+/* ---- Fotogramas clave de la animación ---- */
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }

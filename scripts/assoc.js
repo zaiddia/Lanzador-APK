@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 'use strict';
 /**
- * .apk 关联命令行开关（无需启动界面）
- *   node scripts/assoc.js on   → 注册双击 APK 安装
- *   node scripts/assoc.js off  → 取消关联
+ * Interruptor de línea de comandos para la asociación de .apk (sin abrir la interfaz)
+ *   node scripts/assoc.js on   → registra la instalación con doble clic en un APK
+ *   node scripts/assoc.js off  → quita la asociación
  */
 const path = require('path');
 const fs = require('fs');

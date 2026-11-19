@@ -1,23 +1,23 @@
 'use strict';
 /**
- * 自动检测 · 采集层（只在主进程跑）
+ * Comprobación automática · capa de recolección (solo en el proceso principal)
  *
- * 职责：把机器的真实状态采成一份**纯数据**快照 obs，交给 src/core/autodebug.js 判定。
- * 采集层允许失败 —— 拿不到就留空，让判定层「不知道」，绝不编造结论。
+ * Función: toma el estado real del equipo como una instantánea de **datos puros** obs y se la pasa a src/core/autodebug.js para evaluarla.
+ * La recolección puede fallar: si no obtiene algo lo deja vacío y la capa de evaluación «no lo sabe»; nunca inventa conclusiones.
  *
- * 采集项与耗时预算（一次全量约 2~5 秒）：
- *   - 运行时状态（引擎 status：环境 + adb 在线）
- *   - adb 设备授权状态
- *   - 磁盘余量、数据分区容量、共享目录可写性
- *   - AVD 残留锁、快照空壳、孤儿模拟器进程
- *   - 最近日志里的错误行
+ * Elementos recolectados y presupuesto de tiempo (una pasada completa tarda ~2–5 s):
+ *   - estado del runtime (status del motor: entorno + adb en línea)
+ *   - autorización de adb del dispositivo
+ *   - espacio libre en disco, capacidad de la partición de datos, permiso de escritura en la carpeta compartida
+ *   - bloqueos restantes del AVD, instantáneas vacías, procesos huérfanos del emulador
+ *   - líneas de error en el registro reciente
  */
 const fs = require('fs');
 const path = require('path');
 const { execFile } = require('child_process');
 const { AVD_NAME, SNAPSHOT_NAME } = require('./emulator');
 
-/** 引导阶段计时：第一次看到「在跑但没 ready」的时刻 */
+/** Cronómetro de la fase de arranque: el momento en que se vio por primera vez «en marcha pero no listo» */
 let bootingSince = 0;
 
 function withTimeout(promise, ms, fallback) {
@@ -27,7 +27,7 @@ function withTimeout(promise, ms, fallback) {
   ]);
 }
 
-/** 数 AVD 目录里残留的 .lock（文件或目录都算） */
+/** Cuenta los .lock que quedan en la carpeta del AVD (archivos o carpetas) */
 function countLocks(avdDir) {
   try {
     return fs.readdirSync(avdDir).filter((f) => /\.lock$/i.test(f)).length;
@@ -37,9 +37,9 @@ function countLocks(avdDir) {
 }
 
 /**
- * 快照是不是「空壳」：snapshot.pb 在但内存镜像没了或太小。
- * 这种快照每次开机都要「加载失败再冷启动」，等于白占几 GB 磁盘。
- * 只读判断，不在这里删 —— 删除交给用户确认或修复动作。
+ * Si la instantánea es un «cascarón vacío»: está snapshot.pb pero la imagen de memoria falta o es demasiado pequeña.
+ * Una instantánea así hace que cada arranque «falle al cargar y arranque en frío», y ocupa varios GB de disco en vano.
+ * Solo se evalúa en modo lectura; aquí no se borra: el borrado queda para la confirmación del usuario o una acción de reparación.
  */
 function inspectSnapshot(avdHome, avdName, snapshotName) {
   const base = path.join(avdHome, `${avdName}.avd`, 'snapshots', snapshotName);
@@ -52,7 +52,7 @@ function inspectSnapshot(avdHome, avdName, snapshotName) {
   return { present: true, stale, mb };
 }
 
-/** 数还活着的模拟器孤儿进程（emulator.exe / qemu-system*.exe） */
+/** Cuenta los procesos huérfanos del emulador aún vivos (emulator.exe / qemu-system*.exe) */
 function countOrphanProcesses() {
   return new Promise((resolve) => {
     let out = '';
@@ -69,7 +69,7 @@ function countOrphanProcesses() {
   });
 }
 
-/** 读最近日志文件里的错误行（最多看尾部 300 行） */
+/** Lee las líneas de error del archivo de registro reciente (como máximo las últimas 300 líneas) */
 function recentLogErrors(files, max = 300) {
   const out = [];
   for (const file of files) {
@@ -95,7 +95,7 @@ function recentLogErrors(files, max = 300) {
 }
 
 /**
- * 采一份快照
+ * Toma una instantánea
  * @param {object} ctx { runtime, store, doctor }
  * @returns {Promise<object>} obs
  */
@@ -112,20 +112,20 @@ async function collect(ctx) {
     accel: { checked: false },
   };
 
-  // ---- 设置（最便宜，先取） ----
+  // ---- Configuración (lo más barato, primero) ----
   let settings = {};
   try { settings = store.getSettings() || {}; } catch (_) { settings = {}; }
   obs.settings = {
     orientationMode: (settings.display && settings.display.orientationMode) || 'auto',
     landscape: !!(settings.display && settings.display.landscape),
-    // 0.6.0 起默认原生窗口：只有显式 true 才算嵌入模式
+    // Desde 0.6.0 la ventana nativa es el valor por defecto: solo true explícito cuenta como modo incrustado
     windowEmbed: !!(settings.display && settings.display.windowEmbed === true),
     autoFullscreen: !!(settings.display && settings.display.autoFullscreenOnLaunch),
     keepSnapshot: !(settings.engine && settings.engine.keepSnapshot === false),
     resourceMode: (settings.engine && settings.engine.resourceMode) || '',
   };
 
-  // ---- 运行时状态 ----
+  // ---- Estado del runtime ----
   let status = null;
   try {
     status = await withTimeout(runtime.status(), 20000, null);
@@ -158,7 +158,7 @@ async function collect(ctx) {
     snapshotStale: false,
   };
 
-  // ---- adb 设备授权状态 ----
+  // ---- Autorización de adb del dispositivo ----
   try {
     const client = runtime.client();
     if (client && typeof client.deviceState === 'function') {
@@ -167,9 +167,9 @@ async function collect(ctx) {
         obs.device = { checked: true, state };
       }
     }
-  } catch (_) { /* 探测不到就留 checked:false */ }
+  } catch (_) { /* Si no se puede detectar se deja checked:false */ }
 
-  // ---- 存储 ----
+  // ---- Almacenamiento ----
   try {
     const root = paths ? paths.root : null;
     if (root) {
@@ -198,7 +198,7 @@ async function collect(ctx) {
     }
   } catch (_) { /* ignore */ }
 
-  // ---- 快照 / 锁 / 孤儿 ----
+  // ---- Instantáneas / bloqueos / huérfanos ----
   try {
     if (paths) {
       const snap = inspectSnapshot(paths.avdHome, AVD_NAME, SNAPSHOT_NAME);
@@ -209,25 +209,25 @@ async function collect(ctx) {
 
   const orphans = await countOrphanProcesses();
   if (orphans !== null) {
-    // 正在跑的那台本身就是 emulator.exe + qemu 两个进程，不是残留。
+    // La máquina en marcha ya son dos procesos, emulator.exe + qemu; no son restos.
     const expected = running ? 2 : 0;
     obs.runtime.orphans = Math.max(0, orphans - expected);
   }
 
-  // ---- 网络 ----
+  // ---- Red ----
   try {
     const snap = typeof runtime._networkSnapshot === 'function' ? runtime._networkSnapshot() : null;
     if (snap) obs.network = { ok: !!snap.ok, reason: snap.reason || '', ip: snap.ip || '' };
   } catch (_) { /* ignore */ }
 
-  // ---- 加速 ----
+  // ---- Aceleración ----
   try {
     if (status && status.accel) {
       obs.accel = { checked: true, ok: !!status.accel.ok, note: status.accel.note || '' };
     }
   } catch (_) { /* ignore */ }
 
-  // ---- 日志 ----
+  // ---- Registro ----
   try {
     const dir = path.join(store.DATA_DIR, 'logs');
     const files = [path.join(store.DATA_DIR, 'app.log'), path.join(dir, 'emulator.log')];

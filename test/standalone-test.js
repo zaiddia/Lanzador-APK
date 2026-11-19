@@ -1,16 +1,16 @@
 'use strict';
 /**
- * 独立运行相关的纯 Node 测试：不需要 Electron、不需要模拟器、不需要联网。
+ * Pruebas en Node puro del funcionamiento independiente: sin Electron, sin emulador y sin internet.
  *
- * 守的是一条产品底线（0.5.6 起升级为硬约束）：
- *   **LanzadorAPK 在任何机器、任何设置、任何残留配置下都只跑自带运行时。**
+ * Protegen un límite del producto (restricción estricta desde 0.5.6):
+ *   **LanzadorAPK, en cualquier equipo, con cualquier configuración y cualquier resto de configuración, solo ejecuta su runtime propio.**
  *
- * 具体要盯住三件事：
- *   1. 代码里根本没有第三方底座（MuMu / 雷电 / 蓝叠 / WSA / FydeOS）的实现文件；
- *   2. 就算 settings.json 里写着 mode=mumu / fydeos / attach，也只会拿到 builtin；
- *   3. 打出来的包里不许出现任何第三方模拟器的二进制或目录。
+ * En concreto se vigilan tres cosas:
+ *   1. en el código no hay ningún archivo de implementación de bases de terceros (MuMu / LDPlayer / BlueStacks / WSA / FydeOS);
+ *   2. aunque settings.json diga mode=mumu / fydeos / attach, solo se obtiene builtin;
+ *   3. en el paquete generado no puede haber binarios ni carpetas de emuladores de terceros.
  *
- * 运行：node test/standalone-test.js
+ * Ejecutar: node test/standalone-test.js
  */
 const assert = require('assert/strict');
 const fs = require('fs');
@@ -75,7 +75,7 @@ function touch(dir, rel, bytes = 8) {
   });
 
   test('自动挑选不再探测任何外部运行时', async () => {
-    // 同步断言：autoPick 必须是「直接返回 builtin」，源码里不许出现 probe()
+    // Aserción síncrona: autoPick debe «devolver builtin directamente»; en el código no puede aparecer probe()
     const src = read('src', 'core', 'backends', 'index.js');
     assert(!/\.probe\(/.test(src), '注册表仍在探测外部模拟器');
     assert(!/mumu|fydeos|ldplayer|bluestacks/i.test(src.replace(/[\s\S]*?const REGISTRY[\s\S]*?\];/, '')),

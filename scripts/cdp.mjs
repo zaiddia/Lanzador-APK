@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * 轻量 CDP 客户端（零依赖，Node 22+ 内置 WebSocket）。
- * 用于扫码登录后的浏览器发布自动化：列标签 / 导航 / 执行 JS / 截图 / 上传文件。
+ * Cliente CDP ligero (sin dependencias; Node 22+ trae WebSocket).
+ * Para automatizar publicaciones en el navegador tras iniciar sesión con QR: listar pestañas / navegar / ejecutar JS / capturas / subir archivos.
  *
- * 用法：
+ * Uso:
  *   node scripts/cdp.mjs list
  *   node scripts/cdp.mjs new <url>
  *   node scripts/cdp.mjs eval <target-match> "<js expression>"
@@ -11,7 +11,7 @@
  *   node scripts/cdp.mjs nav  <target-match> <url>
  *   node scripts/cdp.mjs upload <target-match> <css-selector> <file1> [file2...]
  *
- * <target-match> 是 url 或 title 的子串；省略时用第一个 page 标签。
+ * <target-match> es una parte de la url o del título; si se omite se usa la primera pestaña tipo page.
  */
 import fs from 'node:fs';
 import http from 'node:http';

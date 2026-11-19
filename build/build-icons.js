@@ -1,17 +1,17 @@
 'use strict';
 /**
- * 统一图标生成器
+ * Generador unificado de iconos
  *   node_modules/electron/dist/electron.exe build/build-icons.js
  *
- * 一套设计，三种尺寸语言（业界通行做法，不是三套图标）：
- *   1. 主标   ≥64px    build/logo.html 的「APK start」深色磁贴（Chromium 离屏渲染）
- *   2. 简化标 ≤48px    同色板深底 + 安卓绿播放三角（纯 JS 绘制，16px 仍可辨识）
- *   3. 磁贴版          主标裁掉透明边后满幅，交给 Windows 自己裁圆角
+ * Un solo diseño en tres tamaños (práctica habitual, no tres juegos de iconos):
+ *   1. Logo principal ≥64px: el mosaico oscuro «APK lanzador» de build/logo.html (renderizado fuera de pantalla con Chromium)
+ *   2. Logo simplificado ≤48px: mismo fondo oscuro + triángulo de reproducción verde Android (dibujado en JS puro, legible a 16 px)
+ *   3. Versión mosaico: el logo principal sin bordes transparentes, a tamaño completo; Windows recorta las esquinas
  *
- * 产出：
- *   src/ui/assets/logo.png (512) / logo-256 / logo-128 / logo-64    窗口、关于页、Linux
- *   src/ui/assets/tray-16|20|24|32.png                               托盘（简化标）
- *   src/ui/assets/appicon.ico                                        16–256 多尺寸
+ * Genera:
+ *   src/ui/assets/logo.png (512) / logo-256 / logo-128 / logo-64    ventana, «Acerca de», Linux
+ *   src/ui/assets/tray-16|20|24|32.png                               bandeja (logo simplificado)
+ *   src/ui/assets/appicon.ico                                        varios tamaños 16–256
  *   build/store-assets/StoreLogo 50 / Square44 / Square71 /
  *                      Square150 / Square310 / Wide310x150 / Splash 620x300
  *   docs/images/logo.png (1024)
@@ -26,13 +26,13 @@ const UI = path.join(ROOT, 'src', 'ui', 'assets');
 const STORE = path.join(ROOT, 'build', 'store-assets');
 const DOCS = path.join(ROOT, 'docs', 'images');
 
-// 1:1 像素，别让高 DPI 缩放把 1024 渲染成 1280
+// Píxeles 1:1, para que el escalado de alta DPI no convierta 1024 en 1280
 app.commandLine.appendSwitch('force-device-scale-factor', '1');
 app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
 app.disableHardwareAcceleration();
 
 const SQ = 1024;
-const TILE_RATIO = 896 / 1024;            // 主标里磁贴占画面比例
+const TILE_RATIO = 896 / 1024;            // Proporción del mosaico dentro del logo principal
 const TILE_PAD = Math.round((SQ - SQ * TILE_RATIO) / 2);
 
 function ensureDir(p) {
@@ -53,7 +53,7 @@ function save(file, buf) {
   return { file, buf, dim };
 }
 
-/** PNG-in-ICO：Vista 起 ICO 条目可直接内嵌 PNG，不重编码、不丢 alpha。 */
+/** PNG dentro de ICO: desde Vista una entrada ICO puede contener un PNG directamente, sin recodificar ni perder alfa. */
 function icoFrom(entries) {
   const items = entries.slice().sort((a, b) => a.size - b.size);
   const head = Buffer.alloc(6);
@@ -77,9 +77,9 @@ function icoFrom(entries) {
   return Buffer.concat([head, dir, ...items.map((i) => i.buf)]);
 }
 
-// 一个窗口画布同时容纳三种布局，渲染后按坐标裁剪。
-// 不要每次新建 BrowserWindow：offscreen 模式下连续 destroy/create 时，
-// 第二次 loadFile 会稳定报 ERR_FAILED（Electron 33 的坑）。
+// Un solo lienzo de ventana contiene los tres diseños; después de renderizar se recorta por coordenadas.
+// No crear un BrowserWindow cada vez: en modo offscreen, al destruir/crear seguido,
+// el segundo loadFile falla siempre con ERR_FAILED (problema de Electron 33).
 const CANVAS = 1240;
 let _win = null;
 
@@ -98,7 +98,7 @@ async function ensureWindow() {
   await _win.loadFile(path.join(__dirname, 'logo.html'));
   try {
     await _win.webContents.executeJavaScript('document.fonts.ready.then(() => true)');
-  } catch (_) { /* 老版本没有 fonts API，靠下面的延时 */ }
+  } catch (_) { /* Las versiones antiguas no tienen la API de fuentes; se usa la espera de abajo */ }
   await new Promise((r) => setTimeout(r, 900));
   return _win;
 }
@@ -135,7 +135,7 @@ app.whenReady().then(async () => {
   console.log('渲染启动图（splash 1240x600）…');
   const splash = await render('splash', 1240, 600);
 
-  // 磁贴版：裁掉主标四周的透明留白，让磁贴满幅，避免开始菜单里图标偏小
+  // Versión mosaico: recorta el margen transparente del logo para que llene el mosaico y el icono no se vea pequeño en el menú Inicio
   const tileBox = { x: TILE_PAD, y: TILE_PAD, width: SQ - TILE_PAD * 2, height: SQ - TILE_PAD * 2 };
   const tile = square.crop(tileBox);
   const tileSize = tile.getSize();

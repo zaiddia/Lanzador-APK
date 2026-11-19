@@ -1,13 +1,13 @@
 'use strict';
 /**
- * 设置页 UI 冒烟测试（需要真实 Electron 窗口）
+ * Prueba rápida de la interfaz de configuración (necesita una ventana de Electron real)
  *
- * 运行：electron test/settings-ui-test.js
- * 输出：test/out/settings-*.png
+ * Ejecutar: electron test/settings-ui-test.js
+ * Salida: test/out/settings-*.png
  *
- * 为什么单独写：设置页的结构刚大改过（加了分类导航与搜索），
- * 纯 Node 单测只能校验源码结构，校验不了「点得动、显示得对」。
- * 这里用真实渲染进程跑一遍：打开设置 → 切分类 → 搜索 → 截图。
+ * Por qué va aparte: la estructura de la configuración se rehízo hace poco (se agregaron navegación por categorías y búsqueda),
+ * y las pruebas en Node puro solo verifican la estructura del código, no que «se pueda pulsar y se vea bien».
+ * Aquí se usa un proceso de renderizado real: abrir configuración → cambiar de categoría → buscar → capturar.
  */
 
 const { app, ipcMain, BrowserWindow } = require('electron');
@@ -75,7 +75,7 @@ const OVERRIDES = {
   'keymap:isEnabled': () => ({ enabled: true }),
 };
 
-// 其余通道统一返回空对象：app.js 里所有调用都有 .catch / 空值兜底
+// Los demás canales devuelven un objeto vacío: todas las llamadas de app.js tienen .catch / respaldo para valores vacíos
 const CHANNELS = [
   'apk:pick', 'apk:parse', 'apk:install', 'apk:reveal', 'dialog:openDir',
   'settings:restoreSystem', 'settings:refreshPointer', 'settings:unhook', 'settings:setSharedDir',
@@ -128,7 +128,7 @@ app.whenReady().then(async () => {
   const evalJs = (code) => win.webContents.executeJavaScript(code, true);
 
   console.log('\n[设置页 · 分类导航]');
-  // 先打开设置弹窗（自动检测结果是在打开设置时取回来渲染的）
+  // Primero se abre el diálogo de configuración (los resultados de la comprobación automática se obtienen y muestran al abrirlo)
   await evalJs(`document.getElementById('btnSettings').click()`);
   await new Promise((r) => setTimeout(r, 900));
   const modalOpen = await evalJs(`document.getElementById('settingsMask').classList.contains('on')`);
@@ -141,11 +141,11 @@ app.whenReady().then(async () => {
     visible: Array.from(document.querySelectorAll('#settingsBody [data-cat]')).filter(g => !g.hidden).map(g => g.dataset.cat),
   }))()`);
   step('导航项渲染出来了', navInfo.items === 8, `${navInfo.items} 项`);
-  // 注意：分类会被记住（localStorage），所以这里只断言「同一时刻只显示一个分类的分组」
+  // Ojo: la categoría se recuerda (localStorage), así que aquí solo se afirma que «en cada momento solo se ven los grupos de una categoría»
   const oneCat = navInfo.visible.length > 0 && navInfo.visible.every((c) => c === navInfo.visible[0]);
   step('同一时刻只显示一个分类的分组', oneCat, `默认可见：${navInfo.visible.join(',')}`);
 
-  // 点「显示与窗口」
+  // Pulsar «Pantalla y ventana»
   await evalJs(`document.querySelector('#setNav .set-nav-item[data-cat="display"]').click()`);
   await new Promise((r) => setTimeout(r, 300));
   const afterSwitch = await evalJs(`(() => ({
@@ -157,7 +157,7 @@ app.whenReady().then(async () => {
 
   await win.capturePage().then((img) => fs.writeFileSync(path.join(OUT, 'settings-display.png'), img.toPNG()));
 
-  // 点「诊断与修复」，看自动检测面板
+  // Pulsar «Diagnóstico y reparación» y mirar el panel de comprobación automática
   await evalJs(`document.querySelector('#setNav .set-nav-item[data-cat="diag"]').click()`);
   await new Promise((r) => setTimeout(r, 400));
   const diag = await evalJs(`(() => ({
@@ -172,7 +172,7 @@ app.whenReady().then(async () => {
   step('每条问题都有「处理」按钮', diag.fixBtns === 3, `${diag.fixBtns} 个按钮`);
   step('状态行显示上次检测时间', /Última comprobación/.test(diag.text), diag.text);
 
-  // 滚到自动检测面板再截图（等合成器跟上，避免拍到上一帧）
+  // Desplazarse al panel de comprobación automática y capturar (esperando al compositor para no capturar el fotograma anterior)
   await evalJs(`document.getElementById('autodebugGroup').scrollIntoView({ block: 'start' })`);
   await new Promise((r) => setTimeout(r, 900));
   await win.capturePage().then((img) => fs.writeFileSync(path.join(OUT, 'settings-diag.png'), img.toPNG()));

@@ -1,7 +1,7 @@
 'use strict';
 /**
- * APK 元信息提取：包名 / 版本 / 应用名 / 启动 Activity / 图标 / ABI
- * 全部离线完成，不需要 aapt、不需要 adb、不需要联网。
+ * Extracción de metadatos del APK: nombre del paquete / versión / nombre de la app / Activity de inicio / icono / ABI
+ * Todo sin conexión: no necesita aapt, ni adb, ni internet.
  */
 const fs = require('fs');
 const { ZipFile } = require('./zip');
@@ -25,7 +25,7 @@ function isLauncherActivity(node) {
 }
 
 function pickIconFromZip(zip) {
-  // 兜底：在 res/ 里找最大的、名字像图标的位图（png / webp / jpg 都认）
+  // Respaldo: busca en res/ el mapa de bits más grande con nombre de icono (acepta png / webp / jpg)
   const candidates = zip.names().filter((n) => /^res\/.*\.(png|webp|jpe?g)$/i.test(n));
   const scored = candidates.map((n) => {
     const e = zip.entries.get(n);
@@ -49,33 +49,33 @@ function pickIconFromZip(zip) {
 
 const IMG_RE = /\.(png|webp|jpe?g)$/i;
 
-// ---- 屏幕方向 ----
-// AndroidManifest 里 android:screenOrientation 是一个枚举整数：
+// ---- Orientación de la pantalla ----
+// android:screenOrientation en AndroidManifest es un entero enumerado:
 //   0 unspecified / 1 portrait / 2 landscape / 3 sensor / 4 sensorLandscape
 //   5 sensorPortrait / 6 reverseLandscape / 7 reversePortrait / 8 behind
 //   9 nosensor / 10 user / 11 fullSensor / 12 userLandscape / 13 userPortrait
 //   14 fullUser / 15 locked
-// 只有「明确钉死某一方向」的才计入统计；sensor / fullSensor / user / unspecified
-// 这些会跟随重力，必须由运行时的物理面板决定，统计时必须跳过，否则每个应用都会
-// 被算成「方向未定」。
+// solo cuentan las que «fijan claramente una orientación»; sensor / fullSensor / user / unspecified
+// siguen la gravedad y las decide la pantalla física del runtime; hay que omitirlas al contar, o todas las apps
+// quedarían como «orientación indefinida».
 const ORI_PORTRAIT = new Set([1, 5, 7, 13]);
 const ORI_LANDSCAPE = new Set([2, 4, 6, 12]);
 
 /**
- * 判断一个应用「天然」是竖屏还是横屏。
+ * Determina si una app es «naturalmente» vertical u horizontal.
  *
- * 为什么需要它：模拟器的物理面板（hw.lcd）方向一旦和应用自己的
- * screenOrientation 不一致，Android 只会给应用一个信箱式（letterbox）的
- * 中间窄条 —— 两侧全是黑边，怎么调 wm size / density / letterbox-style 都
- * 填不满（这套组合我们逐项试过，见 docs）。唯一能让画面铺满窗口的办法，
- * 就是让面板方向和应用声明的一致。所以在安装时离线把方向算出来存进 apps.json，
- * 启动时按它选面板，用户就不会看到黑边。
+ * Por qué: si la orientación de la pantalla física del emulador (hw.lcd) no coincide con
+ * el screenOrientation de la app, Android solo le da una franja estrecha tipo buzón (letterbox)
+ * en el centro, con bordes negros a los lados, y ningún ajuste de wm size / density / letterbox-style
+ * la llena (probamos todas las combinaciones, ver docs). La única forma de que la imagen llene la ventana
+ * es que la orientación de la pantalla coincida con la declarada por la app. Por eso al instalar se calcula sin conexión y se guarda en apps.json,
+ * y al iniciar se elige la pantalla según eso; así el usuario no ve bordes negros.
  *
- * 统计口径：以声明了明确方向的 Activity 数量为准（启动 Activity 加权，
- * 因为它是用户最常看到的那一个）。红果这类「几十个 portrait + 一堆 sensor」
- * 会得到 portrait；墨读这种单 Activity landscape 会得到 landscape。
+ * Criterio: la cantidad de Activities con orientación explícita (la Activity de inicio pesa más,
+ * porque es la que el usuario ve más). Una app con «decenas de portrait + varias sensor»
+ * da portrait; una app con una sola Activity landscape da landscape.
  *
- * @returns {'portrait'|'landscape'|null} null = 声明为跟随重力，交给设置决定
+ * @returns {'portrait'|'landscape'|null} null = declara seguir la gravedad; decide la configuración
  */
 function detectOrientation(acts, launcher) {
   let portrait = 0;
@@ -92,7 +92,7 @@ function detectOrientation(acts, launcher) {
   return portrait > landscape ? 'portrait' : 'landscape';
 }
 
-/** 取节点上的 drawable / src 引用，还原成 APK 内的文件路径 */
+/** Toma la referencia drawable / src del nodo y la convierte en la ruta del archivo dentro del APK */
 function drawableFileOf(node, res) {
   for (const name of ['drawable', 'src']) {
     const a = attr(node, name);
@@ -108,10 +108,10 @@ function drawableFileOf(node, res) {
 }
 
 /**
- * 在图标 XML 的节点树里找可用位图。深度优先、XML 最多再展开 3 层：
- * 现代图标常见 `<adaptive-icon><foreground><inset><drawable/></inset></foreground>`，
- * 或者 `<layer-list><item><bitmap android:src="@drawable/x"/></item></layer-list>`，
- * 只认一层属性会直接落到「品牌占位图」。
+ * Busca un mapa de bits utilizable en el árbol de nodos del XML del icono. Primero en profundidad, el XML se expande hasta 3 niveles más:
+ * Los iconos modernos suelen ser `<adaptive-icon><foreground><inset><drawable/></inset></foreground>`,
+ * o `<layer-list><item><bitmap android:src="@drawable/x"/></item></layer-list>`;
+ * si solo se lee un nivel de atributos se termina en la «imagen provisional de marca».
  */
 function iconFromNode(zip, node, res, depth = 0) {
   const file = drawableFileOf(node, res);
@@ -132,7 +132,7 @@ function iconFromNode(zip, node, res, depth = 0) {
   return null;
 }
 
-/** 从自适应图标 / layer-list 的 XML 里找出可用的前景/背景位图 */
+/** Busca mapas de bits de primer plano/fondo utilizables en el XML de un icono adaptable / layer-list */
 function iconFromXml(zip, xmlBuffer, res, depth = 0) {
   let root;
   try {
@@ -140,22 +140,22 @@ function iconFromXml(zip, xmlBuffer, res, depth = 0) {
   } catch (_) {
     return null;
   }
-  // 先按规范顺序找 foreground → background → monochrome
+  // Primero en el orden de la especificación: foreground → background → monochrome
   for (const key of ['foreground', 'background', 'monochrome']) {
     const node = root.children.find((c) => c.name === key) || (root.name === key ? root : null);
     if (!node) continue;
     const hit = iconFromNode(zip, node, res, depth);
     if (hit) return hit;
   }
-  // 再整棵树扫一遍（layer-list / bitmap / inset 这类没有固定子节点名的）
+  // Luego se recorre todo el árbol (para layer-list / bitmap / inset, que no tienen nombres de hijos fijos)
   return iconFromNode(zip, root, res, depth);
 }
 
 /**
- * 解析一个 APK 的元信息。
- * 走文件版 ZIP 读取器（只读中央目录 + 按需读条目），因此**不把整个 APK 读进内存**：
- * 旧版 fs.readFileSync 整包读会让 2GB 以上的安装包直接失败（Node 单 Buffer 上限），
- * 低内存机器上大包也容易被 OOM 打断。
+ * Lee los metadatos de un APK.
+ * Usa el lector ZIP por archivo (solo lee el directorio central + las entradas que hagan falta), así que **no carga todo el APK en memoria**:
+ * la versión anterior con fs.readFileSync del paquete entero fallaba con instaladores de más de 2 GB (límite de un Buffer de Node),
+ * y en equipos con poca memoria los paquetes grandes podían terminar por falta de memoria.
  */
 function parseApk(filePath) {
   const stat = fs.statSync(filePath);
@@ -168,7 +168,7 @@ function parseApk(filePath) {
   }
 }
 
-/** parseApk 的主体：调用方负责关闭 zip */
+/** Cuerpo de parseApk: quien llama se encarga de cerrar el zip */
 function parseApkZip(zip, filePath, stat) {
   if (!zip.has('AndroidManifest.xml')) {
     throw new Error('Falta AndroidManifest.xml: no es un APK único (puede ser un paquete dividido .apks/.xapk)');
@@ -177,12 +177,12 @@ function parseApkZip(zip, filePath, stat) {
   const manifestBuf = zip.read('AndroidManifest.xml');
   const manifest = parseAxml(manifestBuf);
 
-  // package 是 manifest 上的**非命名空间**属性（ns=''），必须按「任意命名空间」找：
-  // attrValue 默认只认 android 命名空间，传 null 表示不限定命名空间。
+  // package es un atributo **sin espacio de nombres** del manifiesto (ns=''); hay que buscarlo con «cualquier espacio de nombres»:
+  // attrValue por defecto solo acepta el espacio android; pasar null quita esa restricción.
   const packageName = attrValue(manifest, 'package', null);
   if (!packageName) throw new Error('No se encontró el nombre del paquete en el manifiesto');
-  // package 会一路流到路径拼接和 adb shell，必须是纯合法的 Android 包名。
-  // 恶意/损坏的清单里塞进 "../"、盘符或 shell 元字符时在这里就拦下（issue #2 P0-1）。
+  // package termina en uniones de rutas y en adb shell; tiene que ser un nombre de paquete Android totalmente válido.
+  // Si un manifiesto malicioso/dañado mete "../", letras de unidad o metacaracteres de shell, se bloquea aquí (issue #2 P0-1).
   if (!validPackageName(packageName)) {
     throw new Error(`El nombre del paquete del manifiesto no es válido: ${JSON.stringify(String(packageName).slice(0, 80))}`);
   }
@@ -197,13 +197,13 @@ function parseApkZip(zip, filePath, stat) {
 
   const app = children(manifest, 'application')[0] || { children: [], attrs: [] };
 
-  // ---- 资源表（用于解析 @0x7f 引用）----
+  // ---- Tabla de recursos (para resolver referencias @0x7f) ----
   let res = null;
   if (zip.has('resources.arsc')) {
     try { res = new ResTable(zip.read('resources.arsc')); } catch (_) { res = null; }
   }
 
-  // ---- 应用名 ----
+  // ---- Nombre de la app ----
   let label = null;
   const labelAttr = attr(app, 'label');
   if (labelAttr) {
@@ -215,7 +215,7 @@ function parseApkZip(zip, filePath, stat) {
     label = label.charAt(0).toUpperCase() + label.slice(1);
   }
 
-  // ---- 启动 Activity ----
+  // ---- Activity de inicio ----
   let launchActivity = null;
   const acts = children(app, 'activity').concat(children(app, 'activity-alias'));
   const launcher = acts.find(isLauncherActivity);
@@ -232,10 +232,10 @@ function parseApkZip(zip, filePath, stat) {
     }
   }
 
-  // ---- 屏幕方向（决定模拟器物理面板该用横屏还是竖屏，见 detectOrientation）----
+  // ---- Orientación (decide si la pantalla física del emulador es horizontal o vertical; ver detectOrientation) ----
   const orientation = detectOrientation(acts, launcher);
 
-  // ---- 图标 ----
+  // ---- Icono ----
   let icon = null;
   const iconAttr = attr(app, 'icon') || attr(app, 'roundIcon');
   if (iconAttr) {
@@ -253,7 +253,7 @@ function parseApkZip(zip, filePath, stat) {
   }
   if (!icon) icon = pickIconFromZip(zip);
 
-  // ---- ABI（判断 x86 运行时能否直接跑 ARM 原生库）----
+  // ---- ABI (si el runtime x86 puede ejecutar directamente librerías nativas ARM) ----
   const abis = [...new Set(zip.names()
     .filter((n) => n.startsWith('lib/'))
     .map((n) => n.split('/')[1])
@@ -277,7 +277,7 @@ function parseApkZip(zip, filePath, stat) {
   };
 }
 
-/** 轻量校验：只看头部是不是 PK\x03\x04 */
+/** Validación ligera: solo mira si el encabezado es PK\x03\x04 */
 function quickCheck(filePath) {
   try {
     const fd = fs.openSync(filePath, 'r');

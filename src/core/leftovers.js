@@ -1,16 +1,16 @@
 'use strict';
 /**
- * 清理旧版本残留。
+ * Limpia restos de versiones anteriores.
  *
- * 用户升级 LanzadorAPK 常出现「装过好几个版本、卸载不干净」：便携版每换一次版本就多一个
- * LanzadorAPK-vX.Y.Z-win64-portable 目录；NSIS 安装版升级后可能留下指向已删除目录的
- * 卸载项；更新过程还会在数据目录里留下一堆临时包。
+ * Al actualizar LanzadorAPK es común «tener varias versiones instaladas y que no se desinstalen del todo»: la versión portátil agrega una carpeta
+ * LanzadorAPK-vX.Y.Z-win64-portable por cada versión; tras actualizar el instalador NSIS pueden quedar entradas de desinstalación
+ * que apuntan a carpetas borradas; y la actualización deja un montón de paquetes temporales en la carpeta de datos.
  *
- * 这里只做**可证明安全**的清理：
- *   - 只认「目录里确实有 LanzadorAPK.exe」的旧版本目录，且绝不碰当前正在运行的那个；
- *   - 只删除「InstallLocation 已经不存在」的注册表卸载项（那个本来就已经是死条目）；
- *   - 只删自己更新缓存里的临时文件与指向不存在目标的开始菜单/桌面快捷方式。
- * 任何一步拿不准就跳过，并把原因如实返回给界面。
+ * Aquí solo se hace la limpieza **demostrablemente segura**:
+ *   - solo carpetas de versiones viejas que «de verdad contienen LanzadorAPK.exe», y nunca la que está en ejecución;
+ *   - solo entradas de desinstalación del registro cuyo «InstallLocation ya no existe» (ya eran entradas muertas);
+ *   - solo archivos temporales de nuestra caché de actualizaciones y accesos directos del menú Inicio/escritorio que apuntan a destinos inexistentes.
+ * Ante cualquier duda se omite el paso y se devuelve el motivo tal cual a la interfaz.
  */
 const fs = require('fs');
 const path = require('path');
@@ -29,7 +29,7 @@ function dirSize(p) {
       try {
         if (e.isDirectory()) walk(f);
         else n += fs.statSync(f).size;
-      } catch (_) { /* 占用/无权限，跳过 */ }
+      } catch (_) { /* En uso/sin permisos, se omite */ }
     }
   };
   walk(p);
@@ -41,14 +41,14 @@ function norm(p) {
 }
 
 /**
- * 在若干「可能放程序的」目录里找旧版本目录。
+ * Busca carpetas de versiones viejas en varias carpetas «donde puede haber programas».
  *
- * 以前只扫当前 exe 的父目录 + LOCALAPPDATA\Programs + ProgramFiles，结果用户把
- * 便携版解压到别的地方（E:\下载、桌面、某个项目目录）就永远扫不到 —— 这正是
- * 「其他文件夹里的旧版本清不掉」的原因。现在多路发现：
- *   - 常见安装位置；
- *   - 各磁盘根目录下的浅层（很多便携版直接丢在 D:\LanzadorAPK-…）；
- *   - 桌面 / 开始菜单里现存快捷方式指向的真实 exe 所在目录（最准，用户装过就一定有）。
+ * Antes solo se revisaban la carpeta superior del exe actual + LOCALAPPDATA\Programs + ProgramFiles, y si el usuario
+ * descomprimía la versión portátil en otro lado (E:\Descargas, el escritorio, una carpeta de proyecto) nunca se encontraba;
+ * esa era la causa de «no se limpian las versiones viejas de otras carpetas». Ahora se buscan por varias vías:
+ *   - ubicaciones de instalación habituales;
+ *   - un nivel bajo la raíz de cada disco (muchas versiones portátiles quedan directo en D:\LanzadorAPK-…);
+ *   - la carpeta del exe real al que apuntan los accesos del escritorio / menú Inicio (lo más preciso; si el usuario lo instaló, existe).
  */
 function candidateRoots(installDir) {
   const roots = new Set();
@@ -58,14 +58,14 @@ function candidateRoots(installDir) {
   if (local) add(path.join(local, 'Programs'));
   add(process.env.ProgramFiles);
   add(process.env['ProgramFiles(x86)']);
-  // 用户主目录下几个高频位置
+  // Algunas ubicaciones frecuentes dentro de la carpeta del usuario
   const home = os.homedir();
   if (home) {
     add(path.join(home, 'Downloads'));
     add(path.join(home, 'Desktop'));
     add(path.join(home, 'Documents'));
   }
-  // 每个本地磁盘根目录（便携版常直接放盘根）
+  // Raíz de cada disco local (las versiones portátiles suelen quedar en la raíz)
   try {
     for (const drv of ['C:\\', 'D:\\', 'E:\\', 'F:\\', 'G:\\', 'H:\\']) {
       if (fs.existsSync(drv)) add(drv.replace(/\\+$/, ''));
@@ -75,9 +75,9 @@ function candidateRoots(installDir) {
 }
 
 /**
- * 从快捷方式（.lnk / .desktop）反查 LanzadorAPK.exe 的真实所在目录。
- * 这是最可靠的发现手段：只要用户曾经创建过桌面图标或开始菜单项，目标路径就在里面，
- * 无论它被放在哪个盘、哪个深层文件夹。
+ * A partir de los accesos directos (.lnk / .desktop) se obtiene la carpeta real de LanzadorAPK.exe.
+ * Es la forma más fiable: si el usuario alguna vez creó un icono en el escritorio o una entrada en el menú Inicio, la ruta de destino está ahí,
+ * sin importar el disco ni lo profunda que sea la carpeta.
  */
 function rootsFromShortcuts() {
   const dirs = new Set();
@@ -104,7 +104,7 @@ function rootsFromShortcuts() {
             if (exePath && /[\\/]LanzadorAPK(\.exe)?$/i.test(exePath)) dirs.add(path.dirname(exePath));
           }
         } else {
-          // .lnk 是二进制，但目标路径以可读形式内嵌，直接扫字节里的 LanzadorAPK*.exe
+          // El .lnk es binario, pero la ruta de destino va incrustada en forma legible; se buscan directamente los bytes LanzadorAPK*.exe
           const buf = fs.readFileSync(full);
           const s = buf.toString('latin1');
           const re = /[A-Za-z]:\\[^\x00\x01-\x1f]*?LanzadorAPK(?:-[^\x00\x01-\x1f]*)?[\\/]?LanzadorAPK\.exe|[A-Za-z]:\\[^\x00\x01-\x1f]*?LanzadorAPK\.exe/gi;
@@ -113,13 +113,13 @@ function rootsFromShortcuts() {
             dirs.add(path.dirname(mm[0].replace(/\x00.*$/, '')));
           }
         }
-      } catch (_) { /* 读不动就跳过 */ }
+      } catch (_) { /* Si no se puede leer se omite */ }
     }
   }
   return [...dirs];
 }
 
-/** 旧版本程序目录：形如 LanzadorAPK*，且里面有 LanzadorAPK.exe，且不是当前安装目录 */
+/** Carpeta de una versión anterior: con forma LanzadorAPK*, que contiene LanzadorAPK.exe y no es la carpeta de instalación actual */
 function scanDirs(installDir) {
   const out = [];
   const seen = new Set();
@@ -129,7 +129,7 @@ function scanDirs(installDir) {
     if (seen.has(key)) return;
     seen.add(key);
     if (key === cur) return;
-    // 必须是「真的是 LanzadorAPK」的目录，避免误删同名文件夹
+    // Tiene que ser una carpeta que «de verdad sea LanzadorAPK», para no borrar por error una carpeta con el mismo nombre
     if (!fs.existsSync(path.join(full, EXE))) return;
     out.push({
       kind: 'dir',
@@ -147,10 +147,10 @@ function scanDirs(installDir) {
       consider(path.join(root, e.name));
     }
   }
-  // 快捷方式反查到的目录：本身可能就是旧版本目录，或其父/子目录是
+  // La carpeta obtenida del acceso directo puede ser ella misma una versión vieja, o serlo su carpeta superior/inferior
   for (const d of rootsFromShortcuts()) {
     if (/^LanzadorAPK/i.test(path.basename(d))) consider(d);
-    // 也看看它的同级（dist 下往往并排好几个版本目录）
+    // También se miran las carpetas hermanas (en dist suele haber varias versiones lado a lado)
     const parent = path.dirname(d);
     let sib = [];
     try { sib = fs.readdirSync(parent, { withFileTypes: true }); } catch (_) { continue; }
@@ -161,7 +161,7 @@ function scanDirs(installDir) {
   return out;
 }
 
-/** 注册表里指向已不存在目录的卸载项 */
+/** Entradas de desinstalación del registro que apuntan a carpetas inexistentes */
 function scanRegistry() {
   const out = [];
   const roots = [
@@ -175,7 +175,7 @@ function scanRegistry() {
       text = execFileSync('reg', ['query', root, '/s', '/f', 'LanzadorAPK', '/t', 'REG_SZ'],
         { encoding: 'utf8', windowsHide: true, timeout: 15000, maxBuffer: 4 * 1024 * 1024 });
     } catch (_) { continue; }
-    // reg query 输出是分块的「键 → 值」，这里按块切
+    // La salida de reg query va en bloques «clave → valores»; aquí se separa por bloques
     const blocks = String(text).split(/\r?\n\r?\n/);
     for (const b of blocks) {
       const key = (/^(HKEY_[^\r\n]+)$/m.exec(b) || [])[1];
@@ -187,7 +187,7 @@ function scanRegistry() {
       const install = (loc || '').trim().replace(/^"|"$/g, '');
       const uninsPath = (unins || '').trim().replace(/^"|"$/g, '');
       const installMissing = install ? !fs.existsSync(install) : false;
-      // 只处理「明明已经没装、却还挂在应用列表里」的死条目
+      // Solo se procesan entradas muertas «que ya no están instaladas pero siguen en la lista de apps»
       const deadUninstaller = uninsPath && !fs.existsSync(uninsPath.split('"')[0]);
       if (!installMissing && !deadUninstaller) continue;
       out.push({
@@ -201,7 +201,7 @@ function scanRegistry() {
   return out;
 }
 
-/** 更新缓存 / 临时包 */
+/** Caché de actualizaciones / paquetes temporales */
 function scanTemp(dataDir) {
   const out = [];
   const dirs = [path.join(dataDir, 'update'), os.tmpdir()];
@@ -222,8 +222,8 @@ function scanTemp(dataDir) {
   return out;
 }
 
-/** 旧/废弃的快速启动快照：default_boot 是早期版本留下的（一份 ram.img 约 3GB），
- *  *.stale-* 是「删不掉就改名」的残留。当前快照名是 lanzadorapk，绝不碰。 */
+/** Instantáneas de arranque rápido viejas/descartadas: default_boot la dejaron versiones tempranas (un ram.img de unos 3 GB),
+ *  *.stale-* son restos de «no se pudo borrar, se renombró». La instantánea actual se llama lanzadorapk y nunca se toca. */
 function scanSnapshots(avdHome) {
   const out = [];
   if (!avdHome) return out;
@@ -232,7 +232,7 @@ function scanSnapshots(avdHome) {
   try { list = fs.readdirSync(snapDir, { withFileTypes: true }); } catch (_) { return out; }
   for (const e of list) {
     if (!e.isDirectory()) continue;
-    if (e.name === 'lanzadorapk') continue;   // 当前在用的快照
+    if (e.name === 'lanzadorapk') continue;   // Instantánea en uso
     const full = path.join(snapDir, e.name);
     out.push({
       kind: 'dir',
@@ -270,7 +270,7 @@ function clean(items, { installDir }) {
   for (const it of items || []) {
     try {
       if (it.kind === 'dir') {
-        // 双保险：绝不删当前正在运行的目录
+        // Doble seguro: nunca borrar la carpeta en ejecución
         if (norm(it.path) === cur) { failed.push({ path: it.path, reason: 'Es la versión que se está ejecutando' }); continue; }
         if (!fs.existsSync(path.join(it.path, EXE))) { failed.push({ path: it.path, reason: 'La carpeta no contiene ' + EXE }); continue; }
         if (rm(it.path)) { freed += it.size || 0; removed.push(it.path); }

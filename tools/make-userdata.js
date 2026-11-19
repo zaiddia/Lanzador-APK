@@ -1,7 +1,7 @@
 'use strict';
 /**
- * 生成 userdata 种子镜像（调试用）。
- * 用法: node tools/make-userdata.js <输出文件> [大小MB]
+ * Genera la imagen semilla de userdata (para depuración).
+ * Uso: node tools/make-userdata.js <archivo de salida> [tamaño en MB]
  */
 const fs = require('fs');
 const { buildEmptyExt4 } = require('../src/core/userdata');

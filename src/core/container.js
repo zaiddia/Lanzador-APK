@@ -1,26 +1,26 @@
 'use strict';
 /**
- * 应用级容器（纯计算层）
+ * Contenedor a nivel de app (capa de cálculo pura)
  *
- * LanzadorAPK 底层是 QEMU 全系统虚拟机，不可能像 WSA / 卓易通那样「只加载某个 App
- * 需要的那几个系统服务」——Linux 内核、zygote、system_server 必须整包起来。
- * 但用户真正感受到的「重」并不来自这些常驻服务，而来自：
- *   1. 每开一个 App 就重新引导一次完整 Android（冷启 40~142 秒，CPU/磁盘打满）；
- *   2. 之前开过的 App 全留在后台继续吃内存、拉网络、起唤醒锁；
- *   3. 没有 App 在前台时，qemu 仍以 Normal 优先级和桌面抢 CPU；
- *   4. 文件同步、通知轮询在没有任何 App 打开时也照跑。
+ * La base de LanzadorAPK es una máquina virtual QEMU completa; no puede «cargar solo los servicios del sistema que necesita una app»
+ * como WSA u otros: el kernel Linux, zygote y system_server tienen que arrancar enteros.
+ * Pero el «peso» que siente el usuario no viene de esos servicios residentes, sino de:
+ *   1. arrancar Android completo cada vez que se abre una app (arranque en frío de 40–142 s, CPU/disco al máximo);
+ *   2. las apps abiertas antes se quedan en segundo plano consumiendo memoria, red y wakelocks;
+ *   3. sin apps en primer plano, qemu sigue con prioridad Normal compitiendo por CPU con el escritorio;
+ *   4. la sincronización de archivos y el sondeo de notificaciones siguen corriendo sin ninguna app abierta.
  *
- * 这里把能真实裁掉的部分做成可编排、可单测的命令：
- *   - 环境只引导一次，之后「开 App」= am start + 挂窗口（由 Runtime.beginApp 负责）；
- *   - 开新 App 时停掉其他用户 App 的进程，只留当前这个需要的运行环境；
- *   - 关掉最后一个 App 时让 Android 进 idle、清后台进程、qemu 降优先级；
- *   - 系统包默认一律不动（停 GMS 会让依赖推送/登录的 App 反复弹错），
- *     只在用户显式开启「深度裁剪」时才禁用一小批明确无用的后台包。
+ * Aquí lo que de verdad se puede recortar se convierte en comandos orquestables y probables:
+ *   - el entorno arranca una sola vez; después «abrir una app» = am start + enganchar la ventana (lo hace Runtime.beginApp);
+ *   - al abrir una app nueva se detienen los procesos de las demás apps del usuario, dejando solo el entorno que necesita la actual;
+ *   - al cerrar la última app Android pasa a reposo, se limpian los procesos en segundo plano y qemu baja de prioridad;
+ *   - los paquetes del sistema no se tocan por defecto (detener GMS haría que las apps que dependen de push/inicio de sesión muestren errores),
+ *     solo con «recorte profundo» activado por el usuario se desactiva un pequeño grupo de paquetes en segundo plano claramente inútiles.
  *
- * 本文件不依赖 adb / Electron，全部是纯函数，便于回归测试。
+ * Este archivo no depende de adb / Electron; todo son funciones puras, fáciles de probar.
  */
 
-/** 任何情况下都不能裁剪：动它们会直接导致界面黑屏或应用崩溃 */
+/** No se pueden recortar nunca: tocarlos deja la interfaz en negro o hace fallar las apps */
 const NEVER_TRIM = [
   'android',
   'com.android.systemui',
@@ -35,13 +35,13 @@ const NEVER_TRIM = [
   'com.android.server.telecom',
 ];
 
-/** 只有「深度裁剪」才禁用：这些包只做后台更新/壁纸/打印，停掉不影响打开 App */
+/** Solo con «recorte profundo» se desactivan: estos paquetes solo hacen actualizaciones en segundo plano/fondos/impresión; detenerlos no afecta abrir apps */
 const OPTIONAL_SYSTEM = [
-  'com.android.vending',                    // Play 商店（后台更新扫描）
-  'com.google.android.setupwizard',         // 首次设置向导
-  'com.android.printspooler',               // 打印服务
+  'com.android.vending',                    // Play Store (búsqueda de actualizaciones en segundo plano)
+  'com.google.android.setupwizard',         // Asistente de configuración inicial
+  'com.android.printspooler',               // Servicio de impresión
   'com.android.wallpapercropper',
-  'com.android.dreams.basic',               // 屏保
+  'com.android.dreams.basic',               // Salvapantallas
   'com.android.providers.calendar',
   'com.android.providers.contacts',
   'com.android.managedprovisioning',
@@ -49,13 +49,13 @@ const OPTIONAL_SYSTEM = [
   'com.android.backupconfirm',
 ];
 
-/** 明显属于系统/框架的包：会话裁剪时跳过，避免误杀 */
+/** Paquetes claramente del sistema/framework: se omiten al recortar la sesión para no matarlos por error */
 const SYSTEM_PREFIXES = [
   'android', 'com.android.', 'com.google.android.',
   'com.qualcomm.', 'com.qti.', 'vendor.', 'com.mediatek.',
 ];
 
-/** 只有合法 Android 包名才允许拼进 shell 命令，防止清单被污染后注入 */
+/** Solo se permite poner en comandos de shell nombres de paquete Android válidos, para evitar inyecciones si el manifiesto viene contaminado */
 const SAFE_PKG = /^[A-Za-z][A-Za-z0-9_.]+$/;
 
 function isSystemPackage(pkg) {
@@ -66,13 +66,13 @@ function isSystemPackage(pkg) {
 }
 
 /**
- * 启动某个 App 时要执行的裁剪命令。
+ * Comandos de recorte que se ejecutan al iniciar una app.
  * @param {object} o
- * @param {string} o.pkg            当前要打开的包
- * @param {string[]} o.installed    已装进本机的用户 App 包（store 里的清单）
- * @param {boolean} o.deep          深度裁剪（禁用系统后台包），默认 false
- * @param {boolean} o.killBackground 是否顺带清后台缓存进程，默认 false
- *   （启动阶段清后台可能误伤刚进前台的 App，清理由 endApp 的停放命令负责）
+ * @param {string} o.pkg            paquete que se va a abrir
+ * @param {string[]} o.installed    paquetes de apps del usuario instalados (la lista del store)
+ * @param {boolean} o.deep          recorte profundo (desactiva paquetes de sistema en segundo plano); por defecto false
+ * @param {boolean} o.killBackground si además se limpian los procesos en caché en segundo plano; por defecto false
+ *   (limpiar al arrancar podría afectar a la app que acaba de pasar al frente; la limpieza la hacen los comandos de reposo de endApp)
  * @returns {{commands:string[], stopped:string[], disabled:string[], kept:string[]}}
  */
 function buildSessionCommands({
@@ -94,8 +94,8 @@ function buildSessionCommands({
     commands.push(`am force-stop ${p}`);
   }
 
-  // 清掉系统缓存的后台进程（不含前台、不含 persistent 服务），
-  // 让「只留当前 App」不只是 force-stop 包名，而是真的把内存还回来。
+  // Limpia los procesos en segundo plano que el sistema tiene en caché (sin el de primer plano ni los servicios persistent),
+  // para que «dejar solo la app actual» no sea solo hacer force-stop por nombre, sino devolver memoria de verdad.
   if (killBackground) commands.push('am kill-all 2>/dev/null || true');
 
   if (deep) {
@@ -104,7 +104,7 @@ function buildSessionCommands({
       disabled.push(p);
       commands.push(`pm disable-user --user 0 ${p} 2>/dev/null || true`);
     }
-    // 计量网络下禁后台数据，避免商店/同步在后台持续唤醒
+    // En redes medidas se bloquean los datos en segundo plano, para que la tienda/sincronización no despierte continuamente
     commands.push('settings put global restricted_background_data 1 2>/dev/null || true');
   }
 
@@ -112,8 +112,8 @@ function buildSessionCommands({
 }
 
 /**
- * 关掉最后一个 App 后让容器「空转但不吃资源」。
- * 不关机、不销毁 AVD：下次打开还是秒进，只是先把 CPU/内存让给 Windows。
+ * Tras cerrar la última app, el contenedor queda «en marcha pero sin consumir recursos».
+ * No se apaga ni se destruye el AVD: la próxima vez abre al instante; solo se cede CPU/memoria a Windows primero.
  */
 function buildIdleCommands({ deep = false } = {}) {
   const commands = [
@@ -124,7 +124,7 @@ function buildIdleCommands({ deep = false } = {}) {
   return commands;
 }
 
-/** 从深度裁剪恢复（用户关掉开关时调用，保证可回退） */
+/** Recupera del recorte profundo (se llama cuando el usuario apaga el interruptor, para que sea reversible) */
 function buildRestoreCommands() {
   return [
     ...OPTIONAL_SYSTEM.map((p) => `pm enable ${p} 2>/dev/null || true`),
@@ -133,8 +133,8 @@ function buildRestoreCommands() {
 }
 
 /**
- * 会话状态机：判断一次 launch/close 之后容器该处于什么状态。
- * 纯函数，方便验证「多窗口切换」「最后一个窗口关闭」等边界。
+ * Máquina de estados de la sesión: decide en qué estado queda el contenedor tras un launch/close.
+ * Función pura, para verificar casos límite como «cambiar entre varias ventanas» o «cerrar la última ventana».
  */
 function nextSessionState(active, event, pkg) {
   const set = new Set(active || []);
@@ -148,7 +148,7 @@ function nextSessionState(active, event, pkg) {
   };
 }
 
-/** 给日志/诊断用的一行摘要 */
+/** Resumen de una línea para registro/diagnóstico */
 function describeSession(state, plan) {
   const n = state.active.length;
   if (!n) return 'Contenedor inactivo (Android sigue cargado pero con prioridad baja, 0 procesos de apps)';
@@ -157,16 +157,16 @@ function describeSession(state, plan) {
 }
 
 /**
- * 多窗口（B 方案）下的会话状态机。
+ * Máquina de estados de la sesión con varias ventanas (opción B).
  *
- * 与单窗口的 nextSessionState 不同：这里允许 active 里有多个应用，并且要区分
- * 「前台正在看的」和「后台挂着的」。后台应用是内存大头，所以引入墓碑策略：
- *   - foreground：当前有画面窗口、用户正在交互的那个；
- *   - background：仍算"打开"但没有窗口的，超过宽限期后应被 force-stop（墓碑化），
- *     下次点开走热启动恢复，代价只是重新加载一次页面，不丢登录态/数据。
+ * A diferencia de nextSessionState de una ventana, aquí active puede tener varias apps y hay que distinguir
+ * «la que se ve en primer plano» de «las que esperan en segundo plano». Las de segundo plano son las que más memoria usan, por eso se suspenden:
+ *   - foreground: la que tiene ventana de imagen y con la que interactúa el usuario;
+ *   - background: sigue «abierta» pero sin ventana; pasado el periodo de gracia debe hacerse force-stop (suspenderla);
+ *     al volver a abrirla se recupera con arranque en caliente; solo cuesta recargar la página, sin perder sesión/datos.
  *
- * @param {string[]} active        当前所有活跃应用包名
- * @param {string} foreground      当前前台包（可为 null）
+ * @param {string[]} active        nombres de paquete de todas las apps activas
+ * @param {string} foreground      paquete en primer plano (puede ser null)
  * @returns {{foreground:string|null, background:string[], count:number}}
  */
 function sessionRoles(active = [], foreground = null) {
@@ -180,27 +180,27 @@ function sessionRoles(active = [], foreground = null) {
 }
 
 /**
- * 决定哪些后台应用该被墓碑化（force-stop 回收内存）。
+ * Decide qué apps en segundo plano se suspenden (force-stop para liberar memoria).
  *
- * 规则（保守，宁可少杀也别误伤正在用的）：
- *   - 只处理 background，绝不动 foreground；
- *   - 系统包 / NEVER_TRIM 一律跳过；
- *   - 保留最近 N 个后台（默认 1）以便快速切回不掉登录态，其余墓碑化；
- *   - tombstoneLimit<=0 表示「不留后台」，全部墓碑化（最省内存）。
+ * Reglas (conservadoras: mejor matar de menos que afectar algo en uso):
+ *   - solo se procesan las background, nunca la foreground;
+ *   - paquetes del sistema / NEVER_TRIM siempre se omiten;
+ *   - se conservan las N más recientes en segundo plano (por defecto 1) para volver rápido sin perder sesión; el resto se suspende;
+ *   - tombstoneLimit<=0 significa «no dejar nada en segundo plano», se suspenden todas (lo que más memoria ahorra).
  *
  * @param {object} o { background, installedSystem?, keepRecent?, tombstone? }
  * @returns {{tombstone:string[], keep:string[]}}
  */
 function planTombstones({ background = [], keepRecent = 1 } = {}) {
   const bg = (background || []).filter((p) => p && !isSystemPackage(p) && !NEVER_TRIM.includes(p));
-  // background 末尾是最近的，保留最后 keepRecent 个，其余进墓碑
+  // El final de background es lo más reciente; se conservan las últimas keepRecent y el resto se suspende
   const keepCount = Math.max(0, Number(keepRecent) || 0);
   const keep = bg.slice(Math.max(0, bg.length - keepCount));
   const tombstone = bg.filter((p) => !keep.includes(p));
   return { tombstone, keep };
 }
 
-/** 生成墓碑命令：force-stop 指定后台包，回收其内存但保留数据/登录态 */
+/** Genera los comandos de suspensión: force-stop de los paquetes indicados, liberando memoria pero conservando datos/sesión */
 function buildTombstoneCommands(pkgs = []) {
   return pkgs.filter((p) => SAFE_PKG.test(String(p))).map((p) => `am force-stop ${p}`);
 }

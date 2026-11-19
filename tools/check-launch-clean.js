@@ -1,12 +1,12 @@
 'use strict';
 /**
- * 端到端验证「安卓应用打开只有安卓应用窗口」：
- *   1) 用沙盒 APPDATA 起真实 LanzadorAPK，`--apk` 安装一个测试 APK（会拉起模拟器）；
- *   2) 再 `--launch <包名>` 打开应用；
- *   3) 全程枚举可见顶层窗口：模拟器主窗（Android Emulator - …）与 qemu / netsimd
- *      的控制台窗口都不允许出现；应用窗口必须出现（说明 embed 成功、画面在窗口里）。
+ * Verificación de extremo a extremo de que «al abrir una app Android solo aparece la ventana de esa app»:
+ *   1) se inicia un LanzadorAPK real con APPDATA aislado y `--apk` instala un APK de prueba (lanza el emulador);
+ *   2) luego `--launch <paquete>` abre la app;
+ *   3) se enumeran todo el tiempo las ventanas visibles de primer nivel: la ventana principal del emulador (Android Emulator - …) y las de consola de qemu / netsimd
+ *      no pueden aparecer; la ventana de la app sí debe aparecer (señal de que la incrustación funcionó y la imagen está en la ventana).
  *
- * 用法: node tools/check-launch-clean.js [apkPath]
+ * Uso: node tools/check-launch-clean.js [apkPath]
  */
 const fs = require('fs');
 const os = require('os');
@@ -15,7 +15,7 @@ const { spawn } = require('child_process');
 const { WinAgent } = require('../src/core/agent');
 
 const ROOT = path.join(__dirname, '..');
-// 与另两个窗口测试一样支持外部指定运行时/数据目录（用户的运行时常常在 D 盘）
+// Como las otras dos pruebas de ventanas, admite indicar desde fuera el runtime/carpeta de datos (el runtime del usuario suele estar en D:)
 const ENGINE = path.resolve(process.env.LANZADORAPK_RUNTIME || path.join(ROOT, 'engine'));
 const AVD_DIR = process.env.LANZADORAPK_AVD_HOME || '';
 const ELECTRON = path.join(ROOT, 'node_modules', 'electron', 'dist', 'electron.exe');
@@ -57,7 +57,7 @@ function launch(args, sandbox) {
   let pass = true;
   const check = (c, m) => { console.log(`${c ? '✓' : '✗'} ${m}`); if (!c) pass = false; };
 
-  // ---- 1) 安装 ----
+  // ---- 1) Instalación ----
   console.log('— 安装 APK（首次要冷启动模拟器，约 40~90 秒）…');
   let p = launch(['--apk', APK], sandbox);
   let pkg = '';
@@ -66,12 +66,12 @@ function launch(args, sandbox) {
     try {
       const apps = JSON.parse(fs.readFileSync(path.join(appData, 'apps.json'), 'utf8')).apps || [];
       if (apps.length && apps[0].package) { pkg = apps[0].package; break; }
-    } catch (_) { /* 还没写出来 */ }
+    } catch (_) { /* Aún no se ha escrito */ }
     if (p.exitCode !== null) break;
   }
   check(!!pkg, `安装完成：${pkg || '（超时）'}`);
-  // 必须等第一个实例**真正退出**再起第二个：单实例锁还在的话，第二个会立刻退出，
-  // 表现为「窗口一直不出现」，而不是启动失败（实测踩过，排查了很久）。
+  // Hay que esperar a que la primera instancia **salga de verdad** antes de lanzar la segunda: si el bloqueo de instancia única sigue, la segunda sale al instante,
+  // y el síntoma es «la ventana nunca aparece», no un fallo de arranque (pasó en pruebas y costó mucho encontrarlo).
   try { p.kill(); } catch (_) { /* ignore */ }
   for (let i = 0; i < 30 && p.exitCode === null; i += 1) await sleep(500);
   await sleep(2000);
@@ -82,13 +82,13 @@ function launch(args, sandbox) {
     process.exit(1);
   }
 
-  // ---- 2) 打开应用 ----
+  // ---- 2) Abrir la app ----
   console.log('— 打开应用…');
   p = launch(['--launch', pkg], sandbox);
   let leaked = 0;
   let sawAppWin = false;
   const titles = new Set();
-  // 冷启动 23s + 应用拉起 ~17s，留足 120 秒；之前 60 秒在慢机器上会假失败
+  // Arranque en frío 23 s + inicio de la app ~17 s; se dejan 120 s de margen; antes, con 60 s, daba falsos errores en equipos lentos
   for (let i = 0; i < 240; i += 1) {
     await sleep(500);
     const r = await agent.call({ cmd: 'windows' }, 5000).catch(() => null);
@@ -99,7 +99,7 @@ function launch(args, sandbox) {
       leaked += hit.length;
       console.log(`[${((i + 1) * 0.5).toFixed(1)}s] 可见的异常窗口:`, JSON.stringify(hit));
     }
-    // 应用窗口 = 一个有标题、不是模拟器/控制台的普通窗口
+    // Ventana de la app = una ventana normal con título que no es del emulador ni de consola
     if (!sawAppWin) {
       sawAppWin = list.some((w) => {
         const t = String(w.title || '');

@@ -1,12 +1,12 @@
 'use strict';
 /**
- * 运行时自检（不需要打开界面）
+ * Autocomprobación del runtime (sin abrir la interfaz)
  *
- *   npm run selftest                 # 只体检现有运行时
- *   npm run selftest -- --apk a.apk  # 额外走一遍 安装 → 启动 → 截图 → 共享目录
+ *   npm run selftest                 # solo revisa el runtime existente
+ *   npm run selftest -- --apk a.apk  # además prueba instalar → iniciar → captura → carpeta compartida
  *
- * 用途：装好 Android 之后，用一条命令确认「双击装应用、独立窗口、数据互通」这条链路
- * 在当前机器上真的成立，出问题时也能定位到具体环节。
+ * Uso: con Android instalado, confirma con un comando que la cadena «doble clic para instalar, ventana independiente, archivos compartidos»
+ * funciona de verdad en este equipo, y si falla permite ubicar el paso exacto.
  */
 const fs = require('fs');
 const os = require('os');
@@ -23,7 +23,7 @@ const argOf = (name) => {
   return i >= 0 ? argv[i + 1] : '';
 };
 const APK = argOf('--apk');
-// 留空 = 走产品路径自动拉起内置运行时并用动态 serial；指定时才连接外部设备
+// Vacío = ruta del producto, arranca el runtime integrado y usa un serial dinámico; solo si se indica se conecta a un dispositivo externo
 const SERIAL = argOf('--serial') || '';
 
 const results = [];
@@ -171,8 +171,8 @@ async function step(name, fn) {
     }
   }
 
-  // 自检自己拉起的运行时要主动停掉：否则 emulator 子进程的 stdio 管道
-  // 会让 Node 事件循环一直不退出，命令看起来「卡住」
+  // El runtime que arranca la autocomprobación hay que detenerlo: si no, los pipes stdio del subproceso emulator
+  // mantienen vivo el bucle de eventos de Node y el comando parece «colgado»
   if (!SERIAL && runtime.emulator.running()) {
     await runtime.stop({}).catch(() => {});
   }

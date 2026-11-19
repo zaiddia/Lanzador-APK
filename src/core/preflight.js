@@ -1,36 +1,36 @@
 'use strict';
 /**
- * 本机体检 + 自动配置。
+ * Diagnóstico del equipo + configuración automática.
  *
- * 为什么需要它：LanzadorAPK 装完之后能不能跑，取决于四件和软件无关的事 ——
- *   1. CPU 虚拟化（VT-x / AMD-V）在 BIOS 里有没有开；
- *   2. Windows 的「虚拟机监控程序平台 / Hyper-V」有没有开（WHPX 靠它）；
- *   3. 显卡能撑到什么程度（厂商、显存、驱动版本，能不能走硬件渲染）；
- *   4. 内存 / 磁盘够不够开一台 2~8GB 的安卓虚拟机。
+ * Por qué hace falta: que LanzadorAPK funcione tras instalarlo depende de cuatro cosas ajenas al programa:
+ *   1. si la virtualización de la CPU (VT-x / AMD-V) está activada en la BIOS;
+ *   2. si está activada la «Plataforma del hipervisor de Windows / Hyper-V» (WHPX depende de ella);
+ *   3. hasta dónde llega la tarjeta gráfica (fabricante, memoria de video, versión del controlador, si puede usar renderizado por hardware);
+ *   4. si la memoria / el disco alcanzan para una máquina virtual Android de 2–8 GB.
  *
- * 这些以前都是「启动失败 → 用户看日志 → 自己猜」。现在先查一遍，能自动改的直接改
- * （内存、核心、画质、渲染后端），必须提权的给出一个按钮（开功能 / 装驱动），
- * 只能在 BIOS 里做的说清楚按哪个键、改成什么。
+ * Antes todo esto era «falla el arranque → el usuario mira el registro → adivina». Ahora se revisa primero; lo que se puede cambiar solo se cambia
+ * (memoria, núcleos, calidad, motor de renderizado), lo que requiere permisos tiene un botón (activar la función / instalar el controlador),
+ * y lo que solo se hace en la BIOS se explica claramente: qué tecla pulsar y qué cambiar.
  *
- * 分层：
- *   - collect()   —— 只做探测（Windows 上用一次 PowerShell 取全部信息），有降级路径；
- *   - evaluate()  —— 纯函数：把探测结果翻译成「体检项 + 建议配置」，可单测；
- *   - 应用动作在 main.js（保存设置 / 调已有的提权接口），本模块不碰权限。
+ * Capas:
+ *   - collect()   solo detecta (en Windows con una sola llamada de PowerShell para toda la información), con rutas de respaldo;
+ *   - evaluate()  función pura: convierte la detección en «elementos del diagnóstico + configuración sugerida», probable;
+ *   - las acciones están en main.js (guardar la configuración / llamar a las interfaces de elevación existentes); este módulo no toca permisos.
  *
- * 注意：**不假装能替用户开 BIOS 虚拟化**。那一步只能人去改，我们只负责判断和指路。
+ * Ojo: **no se finge poder activar la virtualización de la BIOS por el usuario**. Ese paso solo lo puede hacer una persona; aquí solo se evalúa y se indica el camino.
  */
 
 const os = require('os');
 const fs = require('fs');
 const path = require('path');
 
-// ---------------- 探测 ----------------
+// ---------------- Detección ----------------
 
 /**
- * 跑一段快捷脚本（Windows 的 powershell.exe），取 JSON；失败/超时返回 null。
+ * Ejecuta un script rápido (powershell.exe de Windows) y obtiene JSON; si falla/se agota devuelve null.
  *
- * 用异步 execFile 而不是 execFileSync：脚本启动 + 两条 CIM 查询要 1~2 秒，
- * 同步跑会把主进程（也就是整个界面）卡住，用户会以为点「体检」把程序点死了。
+ * Se usa execFile asíncrono y no execFileSync: iniciar el script + dos consultas CIM tarda 1–2 s,
+ * y en modo síncrono bloquearía el proceso principal (es decir, toda la interfaz); el usuario creería que «Iniciar diagnóstico» colgó el programa.
  */
 function psJson(script, timeout = 15000) {
   if (process.platform !== 'win32') return Promise.resolve(null);
@@ -56,7 +56,7 @@ const HW_SCRIPT = [
   '$cpu = Get-CimInstance Win32_Processor | Select-Object -First 1 Name,NumberOfCores,NumberOfLogicalProcessors,VirtualizationFirmwareEnabled,VMMonitorModeExtensions,SecondLevelAddressTranslationExtensions;',
   '$cs = Get-CimInstance Win32_ComputerSystem | Select-Object -First 1 HypervisorPresent,TotalPhysicalMemory;',
   '$gpu = @(Get-CimInstance Win32_VideoController | Select-Object Name,DriverVersion,DriverDate,AdapterRAM,VideoProcessor,Status);',
-  // AdapterRAM 在 >4GB 时会被截成 4294967295；真实值在注册表 qwMemorySize（每个适配器一个 000N 子键）
+  // AdapterRAM se trunca en 4294967295 cuando supera 4 GB; el valor real está en el registro, qwMemorySize (una subclave 000N por adaptador)
   '$vram = 0;',
   'Get-ChildItem "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}" -ErrorAction SilentlyContinue | ForEach-Object {',
   '  $v = (Get-ItemProperty $_.PSPath -Name "HardwareInformation.qwMemorySize" -ErrorAction SilentlyContinue)."HardwareInformation.qwMemorySize";',
@@ -74,7 +74,7 @@ const FEATURE_SCRIPT = [
   '$o | ConvertTo-Json -Compress',
 ].join(' ');
 
-/** 判断文件存在（探测 WHPX 的 API 库 / AEHD 驱动 / 虚拟机平台服务） */
+/** Comprueba si existe un archivo (detecta la librería de API de WHPX / el controlador AEHD / el servicio de plataforma de máquina virtual) */
 function fileExists(rel) {
   try {
     return fs.existsSync(path.join(process.env.SystemRoot || 'C:\\Windows', rel));
@@ -85,7 +85,7 @@ function fileExists(rel) {
 
 function dateToISO(v) {
   if (!v) return '';
-  // PowerShell 的 DateTime → `/Date(1700000000000)/` 或 ISO 字符串
+  // DateTime de PowerShell → `/Date(1700000000000)/` o cadena ISO
   const m = /\/Date\((\d+)\)\//.exec(String(v));
   if (m) {
     try { return new Date(Number(m[1])).toISOString().slice(0, 10); } catch (_) { return ''; }
@@ -95,12 +95,12 @@ function dateToISO(v) {
 }
 
 /**
- * 探测本机硬件与虚拟化状态。
+ * Detecta el hardware y el estado de virtualización del equipo.
  *
- * 任何一项查不到都返回 null/0，**绝不让探测失败拖垮调用方**：
- * 查不到就是「未知」，体检项里会写「读不到」，而不是编一个结论。
+ * Si algo no se puede obtener devuelve null/0; **un fallo de detección nunca debe tumbar a quien llama**:
+ * Lo que no se encuentra es «desconocido», y en el diagnóstico aparece «no se pudo leer», en vez de inventar una conclusión.
  *
- * @param {object} o { accel } accel 由 provisioner.emulatorAccel() 传入，避免重复拉起 emulator
+ * @param {object} o { accel } accel viene de provisioner.emulatorAccel(), para no lanzar emulator otra vez
  * @returns {object} hw
  */
 async function collect({ accel = null } = {}) {
@@ -111,7 +111,7 @@ async function collect({ accel = null } = {}) {
   const cs = (raw && raw.cs) || {};
   const gpus = Array.isArray(raw && raw.gpu) ? raw.gpu : (raw && raw.gpu ? [raw.gpu] : []);
 
-  // 选「主显卡」：优先非 Microsoft Basic Display / 非虚拟显示适配器
+  // Elige la «GPU principal»: primero las que no son Microsoft Basic Display / adaptadores de pantalla virtuales
   const usable = gpus.filter((g) => g && g.Name && !/microsoft basic|remote display|virtual display/i.test(g.Name));
   const gpu = (usable[0] || gpus[0]) || {};
   const name = String(gpu.Name || '');
@@ -122,17 +122,17 @@ async function collect({ accel = null } = {}) {
 
   const ramBytes = Number(gpu.AdapterRAM) || 0;
   const qw = Number((raw && raw.vram) || 0);
-  // AdapterRAM 是 32 位无符号，>4GB 会变成 4095MB，这种值不可信
+  // AdapterRAM es un entero de 32 bits sin signo; con >4 GB queda en 4095 MB y ese valor no es fiable
   const vramMB = Math.round((qw > 0 ? qw : (ramBytes > 0 && ramBytes < 4096 * 1024 * 1024 ? ramBytes : 0)) / 1048576);
 
   const hypervisor = cs.HypervisorPresent === true;
   const accelOk = !!(accel && accel.ok);
   /**
-   * 注意 WMI 这两个字段的坑（本机实测）：
-   * Hyper-V / VBS 一旦接管 VT，`VMMonitorModeExtensions` 与
-   * `SecondLevelAddressTranslationExtensions` 会返回 False —— 但机器明明能跑硬件加速。
-   * 所以「False」只有在「没有 Hypervisor、加速也不可用」时才能当成「不支持」，
-   * 否则一律当「未知」，别把能用的机器误判成不支持虚拟化。
+   * Ojo con estos dos campos de WMI (probado en un equipo real):
+   * cuando Hyper-V / VBS toman el control de VT, `VMMonitorModeExtensions` y
+   * `SecondLevelAddressTranslationExtensions` devuelven False, aunque el equipo sí puede usar aceleración por hardware.
+   * Por eso «False» solo cuenta como «no compatible» cuando «no hay hipervisor y la aceleración tampoco funciona»;
+   * en cualquier otro caso es «desconocido», para no tomar por incompatible un equipo que sí sirve.
    */
   const vmExt = cpu.VMMonitorModeExtensions;
   const slatRaw = cpu.SecondLevelAddressTranslationExtensions;
@@ -140,7 +140,7 @@ async function collect({ accel = null } = {}) {
   if (vmExt === false && !hypervisor && !accelOk) vtSupported = false;
   else if (vmExt !== true) vtSupported = 'unknown';
   const slat = slatRaw === true ? true : (slatRaw === false && !hypervisor && !accelOk ? false : 'unknown');
-  // BIOS 侧：同理，Hypervisor 在跑时 firmware 字段也可能不可信
+  // Lado BIOS: igual; con el hipervisor en marcha los campos de firmware tampoco son fiables
   let vtFirmware = null;
   if (cpu.VirtualizationFirmwareEnabled === true) vtFirmware = true;
   else if (cpu.VirtualizationFirmwareEnabled === false && !hypervisor && !accelOk) vtFirmware = false;
@@ -194,13 +194,13 @@ async function collect({ accel = null } = {}) {
   };
 }
 
-// ---------------- 评估（纯函数） ----------------
+// ---------------- Evaluación (funciones puras) ----------------
 
-/** 硬件推荐档位：内存 / 核心 / 画质。规则保守，宁可少给不可给多。 */
+/** Niveles recomendados de hardware: memoria / núcleos / calidad. Reglas conservadoras: mejor dar de menos que de más. */
 function recommendResources({ totalMB = 0, cores = 0, accelOk = false, vramMB = 0 } = {}) {
   const mem = Number(totalMB) || 0;
   const n = Number(cores) || 1;
-  // 虚拟机最多吃宿主的一半，且留 1 核给 Windows；再按绝对区间收一次
+  // La máquina virtual usa como máximo la mitad del anfitrión y deja 1 núcleo para Windows; luego se ajusta otra vez a un rango absoluto
   let memoryMB = 2048;
   if (mem >= 32768) memoryMB = 8192;
   else if (mem >= 16384) memoryMB = 6144;
@@ -212,12 +212,12 @@ function recommendResources({ totalMB = 0, cores = 0, accelOk = false, vramMB = 
   }
   const wantCores = n >= 8 ? 4 : n >= 4 ? Math.max(2, n - 2) : 2;
   const c = Math.max(1, Math.min(wantCores, n - 1));
-  // 软件模拟 + 小显存：分辨率降到 540p，帧率优先（画面面积只有 56%）
+  // Emulación por software + poca memoria de video: la resolución baja a 540p, priorizando los fotogramas (es solo el 56 % del área)
   const renderSize = (!accelOk || (vramMB > 0 && vramMB < 512)) ? '540x960' : 'auto';
   return { memoryMB, cores: c, renderSize };
 }
 
-/** 渲染后端建议：按厂商 + 加速状态 + 显存给一个「先试这个」的档位 */
+/** Sugerencia de motor de renderizado: según fabricante + aceleración + memoria de video da un nivel «para probar primero» */
 function recommendGpu({ vendor = 'unknown', accelOk = false, vramMB = 0 } = {}) {
   if (!accelOk) return { gpuMode: 'software', why: 'No hay aceleración por hardware disponible; se usa renderizado por software para asegurar que haya imagen' };
   if (vendor === 'unknown') return { gpuMode: 'auto', why: 'No se pudo leer el modelo de la tarjeta gráfica; se deja que la cadena de respaldo automática lo pruebe' };
@@ -229,7 +229,7 @@ function recommendGpu({ vendor = 'unknown', accelOk = false, vramMB = 0 } = {}) 
 }
 
 /**
- * 把探测结果翻译成体检报告。
+ * Convierte el resultado de la detección en un informe de diagnóstico.
  *
  * @param {object} o { hw, settings, edition } edition: 'store' | 'installer'
  * @returns {{ level:string, items:Array, patch:object|null, driver:object|null, summary:string }}
@@ -243,7 +243,7 @@ function evaluate({ hw = {}, settings = {}, edition = 'installer' } = {}) {
 
   const add = (item) => items.push(item);
 
-  // ---- 1. CPU 虚拟化（BIOS） ----
+  // ---- 1. Virtualización de la CPU (BIOS) ----
   if (cpu.vtSupported === false) {
     add({
       key: 'vt-unsupported',
@@ -279,7 +279,7 @@ function evaluate({ hw = {}, settings = {}, edition = 'installer' } = {}) {
     });
   }
 
-  // ---- 2. Windows 侧：WHPX / Hyper-V ----
+  // ---- 2. Lado de Windows: WHPX / Hyper-V ----
   const hp = String(v.hypervisorPlatform || 'unknown');
   const hpxOn = hp === 'enabled' || (hp === 'unknown' && v.winHvApi && v.hypervisorPresent);
   if (hpxOn) {
@@ -311,7 +311,7 @@ function evaluate({ hw = {}, settings = {}, edition = 'installer' } = {}) {
     });
   }
 
-  // ---- 3. 硬件加速当前是否真的能用 ----
+  // ---- 3. Si la aceleración por hardware funciona de verdad ahora ----
   if (v.accelOk) {
     add({
       key: 'accel-ok',
@@ -334,7 +334,7 @@ function evaluate({ hw = {}, settings = {}, edition = 'installer' } = {}) {
     });
   }
 
-  // ---- 4. 显卡 ----
+  // ---- 4. Tarjeta gráfica ----
   if (!gpu.name) {
     add({
       key: 'gpu-unknown',
@@ -368,7 +368,7 @@ function evaluate({ hw = {}, settings = {}, edition = 'installer' } = {}) {
     }
   }
 
-  // ---- 5. 内存 / 磁盘 / 系统版本 ----
+  // ---- 5. Memoria / disco / versión del sistema ----
   const total = Number(mem.totalMB) || 0;
   if (!total) {
     add({ key: 'mem-unknown', level: 'warn', title: 'No se pudo leer la memoria física', detail: '', action: null });
@@ -401,7 +401,7 @@ function evaluate({ hw = {}, settings = {}, edition = 'installer' } = {}) {
     });
   }
 
-  // ---- 建议配置 ----
+  // ---- Configuración sugerida ----
   const rec = recommendResources({ totalMB: total, cores: cpu.threads || cpu.cores, accelOk: !!v.accelOk, vramMB: gpu.vramMB });
   const gpuRec = recommendGpu({ vendor: gpu.vendor, accelOk: !!v.accelOk, vramMB: gpu.vramMB });
   const patch = {
@@ -410,13 +410,13 @@ function evaluate({ hw = {}, settings = {}, edition = 'installer' } = {}) {
       memoryMB: rec.memoryMB,
       cores: rec.cores,
       renderSize: rec.renderSize,
-      // 加速不可用 → 直接锁定软件模拟，省掉两轮白等；可用则交回 auto 让降级链工作
+      // Aceleración no disponible → se fija directamente la emulación por software, ahorrando dos rondas inútiles; si está disponible se vuelve a auto para que funcione la cadena de degradación
       gpuMode: v.accelOk ? 'auto' : 'software',
       forceTcg: !v.accelOk,
     },
   };
 
-  // 给这台机器生成一份驱动：以后每次开机都按它来，不用重复体检
+  // Genera un controlador para este equipo: cada arranque lo sigue, sin repetir el diagnóstico
   const vendor = gpu.vendor && gpu.vendor !== 'unknown' ? gpu.vendor : 'unknown';
   const driver = {
     format: 'lanzadorapk-driver/1',

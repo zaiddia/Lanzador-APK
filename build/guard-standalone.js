@@ -1,33 +1,33 @@
 'use strict';
 /**
- * 独立运行守卫：安装包里**不允许**出现第三方模拟器的任何文件。
+ * Vigilante de independencia: el instalador **no puede** contener ningún archivo de emuladores de terceros.
  *
- * 为什么需要一道构建期检查：
- *   LanzadorAPK 的安装包（NSIS / 便携版 / MSIX）必须开箱即用 —— 自带 emulator +
- *   platform-tools + 系统镜像，装完就能跑，不要求用户先装 MuMu / 雷电 / 蓝叠。
- *   0.5.6 起更进一步：**代码里根本没有第三方底座**，安装的不是「自带运行时 + 可选复用」，
- *   而是「只有自带运行时」。所以这里除了拦二进制，也拦第三方底座的适配器源码
- *   （backends/mumu.js / backends/fydeos.js / mumu-compat.js）—— 一旦有人把它们加回来，
- *   构建直接失败，避免「代码里又留了一条能接管别人模拟器的路」。
+ * Por qué hace falta una comprobación al compilar:
+ *   Los instaladores de LanzadorAPK (NSIS / portátil / MSIX) deben funcionar al instalarlos: traen emulator +
+ *   platform-tools + imagen del sistema y funcionan sin que el usuario instale antes MuMu / LDPlayer / BlueStacks.
+ *   Desde 0.5.6 se fue más lejos: **el código no tiene ningún backend de terceros**; lo instalado no es «runtime propio + reutilización opcional»,
+ *   sino «solo runtime propio». Por eso, además de binarios, se bloquea el código de adaptadores de terceros
+ *   (backends/mumu.js / backends/fydeos.js / mumu-compat.js): si alguien los vuelve a agregar,
+ *   la compilación falla, para que no reaparezca «un camino para tomar el control del emulador de otros».
  *
- *   这条约束很容易被悄悄破坏：比如某次把 MuMu 目录当运行时拷进了 build/runtime，
- *   或者在本地把模拟器目录塞进 resources 再打包。那时候应用在开发机上照样能跑，
- *   用户装完却是「要另外装个模拟器」——问题只在别人电脑上暴露。
- *   所以在打包前扫一遍文件名，命中就直接让构建失败。
+ *   Esta regla se rompe fácilmente sin querer: por ejemplo, copiar la carpeta de MuMu a build/runtime como runtime,
+ *   o meter la carpeta del emulador en resources y empaquetar. En la máquina de desarrollo la app funciona igual,
+ *   pero al usuario le sale «hay que instalar otro emulador»: el problema solo aparece en equipos ajenos.
+ *   Por eso antes de empaquetar se revisan los nombres de archivo y, si hay coincidencia, la compilación falla.
  */
 
 const fs = require('fs');
 const path = require('path');
 
 /**
- * 这些名字一旦出现在打包产物里，就说明把「别人的模拟器」塞进来了。
- * 只匹配各个模拟器自己的特征文件名，不用宽泛的 /android/ 之类，避免误报。
+ * Si alguno de estos nombres aparece en el paquete, significa que se coló «el emulador de otro».
+ * Solo se buscan los nombres característicos de cada emulador, nada genérico como /android/, para evitar falsos positivos.
  */
 const BANNED = [
   { re: /^mumu/i, vendor: 'MuMu 模拟器' },          // MuMuManager.exe / MuMuPlayer.exe / MuMuVMMVbox
-  { re: /\.nemu$/i, vendor: 'MuMu 模拟器' },        // 实例描述文件 MuMuPlayer-12.0-0.nemu
-  { re: /^nemu$/i, vendor: 'MuMu 模拟器' },         // MuMu 的 nemu 目录
-  { re: /^nx_main$/i, vendor: 'MuMu 模拟器' },      // MuMu 的 nx_main / nx_device 目录
+  { re: /\.nemu$/i, vendor: 'MuMu 模拟器' },        // archivo de instancia MuMuPlayer-12.0-0.nemu
+  { re: /^nemu$/i, vendor: 'MuMu 模拟器' },         // carpeta nemu de MuMu
+  { re: /^nx_main$/i, vendor: 'MuMu 模拟器' },      // carpetas nx_main / nx_device de MuMu
   { re: /^nx_device$/i, vendor: 'MuMu 模拟器' },
   { re: /^ldplayer/i, vendor: '雷电模拟器' },
   { re: /^dnplayer/i, vendor: '雷电模拟器' },
@@ -36,13 +36,13 @@ const BANNED = [
   { re: /^mgalaxy/i, vendor: 'MEmu 模拟器' },
 ];
 
-/** 只有这些扩展名算「模拟器本体」；.js/.md/.json 这类是源码与配置，不在拦截范围内 */
+/** Solo estas extensiones cuentan como «el emulador en sí»; .js/.md/.json son código y configuración y no se bloquean */
 const BINARY_EXT = /\.(exe|dll|sys|nemu|vdi|vmdk|vbox|iso|msi|bin|dat|db|img)$/i;
 
 /**
- * 递归找命中的文件/目录。
- * @param {string} dir 要扫描的根目录（通常是打包出来的 resources/runtime 或 app 目录）
- * @param {object} [opts] { limit } 命中多少个就停（默认 20，够用来提示）
+ * Busca recursivamente archivos/carpetas que coincidan.
+ * @param {string} dir carpeta raíz a revisar (normalmente resources/runtime o la carpeta app del paquete)
+ * @param {object} [opts] { limit } se detiene tras esta cantidad de coincidencias (por defecto 20, suficiente para avisar)
  * @returns {Array<{path: string, name: string, vendor: string}>}
  */
 function findBundled(dir, { limit = 20 } = {}) {
@@ -53,15 +53,15 @@ function findBundled(dir, { limit = 20 } = {}) {
     try {
       entries = fs.readdirSync(d, { withFileTypes: true });
     } catch (_) {
-      return; // 没权限 / 不存在：当作没东西
+      return; // Sin permisos / no existe: se trata como vacío
     }
     for (const e of entries) {
       if (hits.length >= limit) return;
       const hit = BANNED.find((b) => b.re.test(e.name));
-      // 目录直接算；文件必须像二进制（否则会把源码里的 backends/mumu.js 误判成 MuMu 本体）
+      // Las carpetas cuentan directamente; los archivos deben parecer binarios (si no, backends/mumu.js del código se tomaría por MuMu)
       if (hit && (e.isDirectory() || BINARY_EXT.test(e.name))) {
         hits.push({ path: path.join(d, e.name), name: e.name, vendor: hit.vendor });
-        continue; // 命中目录就不再往里钻，报出来更有用
+        continue; // Si coincide una carpeta no se entra en ella; reportarla es más útil
       }
       if (e.isDirectory()) walk(path.join(d, e.name));
     }
@@ -71,8 +71,8 @@ function findBundled(dir, { limit = 20 } = {}) {
 }
 
 /**
- * 第三方底座的适配器源码（打包产物里出现就说明把「可复用别人模拟器」的能力带回来了）。
- * 这些是 .js，不在 BINARY_EXT 里，所以单独判。
+ * Código de adaptadores de backends de terceros (si aparece en el paquete, volvió la capacidad de «reutilizar emuladores ajenos»).
+ * Son .js y no están en BINARY_EXT, así que se revisan aparte.
  */
 const BANNED_SOURCE = [
   { re: /^mumu\.js$/i, what: 'MuMu 底座适配器' },
@@ -82,8 +82,8 @@ const BANNED_SOURCE = [
 ];
 
 /**
- * 找打包产物里的第三方底座源码。
- * 只认「backends/xxx.js」或直接位于 src/core 下的那几个文件名，避免误伤别的 frame.js。
+ * Busca código de backends de terceros dentro del paquete.
+ * Solo cuenta «backends/xxx.js» o esos nombres directamente en src/core, para no afectar a otro frame.js.
  * @param {string} dir
  * @returns {Array<{path: string, name: string, vendor: string}>}
  */
@@ -101,8 +101,8 @@ function findForbiddenSource(dir) {
       if (e.isDirectory()) { walk(path.join(d, e.name)); continue; }
       const hit = BANNED_SOURCE.find((b) => b.re.test(e.name));
       if (!hit) continue;
-      // 只认这几个明确的落点：backends/ 下的 mumu|fydeos、core/ 下的 mumu-compat / frame。
-      // 别处同名文件（比如渲染层的 frame.js）不拦，避免误伤。
+      // Solo estas ubicaciones concretas: mumu|fydeos en backends/, y mumu-compat / frame en core/.
+      // Archivos con el mismo nombre en otros lugares (como frame.js de la interfaz) no se bloquean.
       const suspicious = dirName === 'backends' || (dirName === 'core' && !/^builtin\.js$/i.test(e.name));
       if (suspicious) hits.push({ path: path.join(d, e.name), name: e.name, vendor: hit.what });
     }
@@ -112,9 +112,9 @@ function findForbiddenSource(dir) {
 }
 
 /**
- * 断言目录里没有第三方模拟器。
+ * Comprueba que no haya emuladores de terceros en la carpeta.
  * @param {string} dir
- * @param {object} [opts] { label, exit } label 用于提示；exit=false 只返回结果不杀进程
+ * @param {object} [opts] { label, exit } label se usa en el aviso; exit=false solo devuelve el resultado sin terminar el proceso
  * @returns {{ok: boolean, skipped?: boolean, hits: Array}}
  */
 function assertStandalone(dir, { label = '打包产物', exit = true } = {}) {

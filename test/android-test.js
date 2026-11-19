@@ -1,7 +1,7 @@
 'use strict';
 /**
- * 安卓系统设置（src/core/android.js）的纯 Node 测试：用假的 adb client 记录命令、返回预设输出，
- * 不需要模拟器。运行：node test/android-test.js
+ * Pruebas en Node puro de los ajustes del sistema Android (src/core/android.js): un cliente adb falso registra los comandos y devuelve salidas predefinidas,
+ * sin emulador. Ejecutar: node test/android-test.js
  */
 const { execFileSync } = require('child_process');
 const fs = require('fs');
@@ -27,7 +27,7 @@ function assert(cond, msg) {
   if (!cond) throw new Error(msg || '断言失败');
 }
 
-/** 假运行时：shell() 按顺序返回 replies 里的输出，并记下收到的脚本 */
+/** Runtime falso: shell() devuelve en orden las salidas de replies y anota los scripts recibidos */
 function fakeSettings(replies) {
   const scripts = [];
   const client = {
@@ -98,8 +98,8 @@ function fakeSettings(replies) {
     assert(s.sdk === 34 && s.wifi === true, JSON.stringify(s));
   });
 
-  // 真实 sh 里验证命令的回退：PATH 里只有一个假的 `media`（模拟没有 cmd 的旧镜像），
-  // 以及一个假的 `cmd`（模拟 Android 11+）。
+  // Verifica en un sh real el respaldo de comandos: en el PATH solo hay un `media` falso (simula una imagen antigua sin cmd)
+  // y un `cmd` falso (simula Android 11+).
   if (process.platform !== 'win32') {
     await test('在 sh 里：没有 cmd 时回退到 media，有 cmd 时不再调用 media', () => {
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lanzadorapk-vol-'));

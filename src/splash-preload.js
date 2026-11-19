@@ -4,9 +4,9 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('lanzadorapkSplash', {
   version: () => ipcRenderer.invoke('splash:version'),
   isFirstRun: () => ipcRenderer.invoke('splash:isFirstRun'),
-  // 运行组件是随包带来的（完整版 / 商店 MSIX 版）还是需要联网下载（轻量版）。
-  // 开机动画据此换掉「下载 xx MB」那套文案 —— 明明已经内置了还写「正在下载」，
-  // 用户会以为装完还要再下一遍。
+  // Si los componentes vienen en el paquete (versión completa / MSIX de la Store) o hay que descargarlos (versión ligera).
+  // La animación de arranque cambia según esto el texto de «descargando xx MB»: si ya vienen incluidos y dice «descargando»,
+  // el usuario creería que tras instalar todavía hay que bajar todo otra vez.
   bundled: () => ipcRenderer.invoke('splash:bundled'),
   onProgress: (cb) => { ipcRenderer.on('splash:progress', (_e, p) => cb(p)); },
   onDone: (cb) => { ipcRenderer.on('splash:done', () => cb()); },

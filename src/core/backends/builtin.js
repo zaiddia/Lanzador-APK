@@ -1,16 +1,16 @@
 'use strict';
 /**
- * 底座：自带的 Google Android Emulator（QEMU 全系统虚拟化）
+ * Backend: el Google Android Emulator integrado (virtualización completa con QEMU)
  *
- * 这是 LanzadorAPK 的默认底座，也是唯一「完全自持」的底座：
- * adb / emulator / 系统镜像都由 LanzadorAPK 自己下载和管理，不依赖用户机器上
- * 已经装了什么模拟器。
+ * Es el backend por defecto de LanzadorAPK y el único «totalmente autosuficiente»:
+ * adb / emulator / imagen del sistema los descarga y gestiona LanzadorAPK, sin depender de
+ * qué emulador tenga instalado el usuario.
  *
- * 真正的实现在 core/engine.js（Runtime）与 core/emulator.js（EmulatorEngine）里，
- * 本文件只做一层薄适配，把它们的接口翻译成本层约定，这样上层不需要知道
- * 自研底座内部有多复杂。
+ * La implementación real está en core/engine.js (Runtime) y core/emulator.js (EmulatorEngine);
+ * este archivo es solo una adaptación delgada que traduce sus interfaces a las convenciones de esta capa, así la capa superior no necesita saber
+ * lo complejo que es el backend propio por dentro.
  *
- * 注意：这个后端依赖 Runtime 实例，构造时通过 deps.runtime 注入。
+ * Atención: este backend depende de una instancia de Runtime, que se inyecta al construirlo con deps.runtime.
  */
 const fs = require('fs');
 const path = require('path');
@@ -42,9 +42,9 @@ class BuiltinBackend extends Backend {
     ]);
   }
 
-  // serial 用可写字段而不是 getter：基类构造函数里会 `this.serial = ''`，
-  // 若在这里定义 getter，赋值会直接抛 TypeError（原型上的 getter 不可写）。
-  // 需要实时值时由 ensure() 主动从 Runtime 取一次写进来。
+  // serial es un campo escribible y no un getter: el constructor de la clase base hace `this.serial = ''`,
+  // y si aquí se definiera un getter, la asignación lanzaría TypeError (un getter del prototipo no es escribible).
+  // Cuando hace falta el valor actual, ensure() lo toma del Runtime y lo escribe.
   syncSerial() {
     if (this.rt) this.serial = this.rt.emuSerial || '';
     return this.serial;
@@ -75,7 +75,7 @@ class BuiltinBackend extends Backend {
     if (!this.rt) return { ok: false, error: 'Runtime no inicializado' };
     const r = await this.rt.ensure({ onLog });
     if (!r || !r.ok) return { ok: false, error: (r && r.error) || 'El runtime de Android no pudo arrancar' };
-    // serial 用可写字段（见 syncSerial 的说明），ensure 成功后同步一次
+    // serial es un campo escribible (ver la explicación de syncSerial); se sincroniza una vez tras un ensure exitoso
     this.syncSerial();
     this.adbPath = this.rt.adbPath();
     return {
@@ -84,15 +84,15 @@ class BuiltinBackend extends Backend {
   }
 
   /**
-   * 自带 emulator 的画面窗口不给候选句柄：它按进程目录作用域由 WinAgent 的
-   * FindEmulator() 找（见 core/win/agent.ps1），这样即使窗口标题变了也不会认错。
+   * La ventana del emulator integrado no da identificadores candidatos: la busca FindEmulator() de WinAgent por ámbito
+   * de carpeta del proceso (ver core/win/agent.ps1), así no se confunde aunque cambie el título de la ventana.
    */
   async windowTargets() { return []; }
 
   /**
-   * 画面窗口是否已经嵌进宿主。
-   * isEmbedded 由 WinAgent 注入（问 agent.ps1 当前 _emu 的父窗口是不是宿主），
-   * 没注入时保守返回 true：自带底座一直走老路径，不需要这块门禁。
+   * Si la ventana de imagen ya está incrustada en el anfitrión.
+   * WinAgent inyecta isEmbedded (pregunta a agent.ps1 si el padre actual de _emu es el anfitrión);
+   * sin inyección devuelve true por prudencia: el backend integrado siempre usa la ruta antigua y no necesita este control.
    */
   async windowReady({ isEmbedded } = {}) {
     if (typeof isEmbedded !== 'function') return { ok: true };
@@ -125,9 +125,9 @@ class BuiltinBackend extends Backend {
   dataInfo() { return this.rt ? this.rt.emulator.dataInfo() : { ok: false }; }
 
   /**
-   * 设置页展示用：宿主上限 + 当前分配。
-   * 自带运行时的内存/CPU 是写进 qemu 命令行的，改完下次开安卓生效；
-   * 数据分区可以就地扩容（resizeData），不丢已装应用。
+   * Para mostrar en la configuración: límite del anfitrión + asignación actual.
+   * La memoria/CPU del runtime integrado van en la línea de comandos de qemu y se aplican al próximo arranque de Android;
+   * la partición de datos se puede ampliar en el sitio (resizeData) sin perder las apps instaladas.
    */
   resources() {
     const info = this.dataInfo() || {};
@@ -155,9 +155,9 @@ class BuiltinBackend extends Backend {
   }
 
   /**
-   * 大包预检：除了物理磁盘，还要看 /data 分区本身够不够。
-   * 50GB 级游戏装不下的最常见原因不是下载失败，而是 userdata 镜像还是
-   * 默认的 6/8GB —— 装到 dexopt 阶段才报 INSTALL_INSUFFICIENT_STORAGE。
+   * Comprobación previa para paquetes grandes: además del disco físico, hay que ver si alcanza la partición /data.
+   * La causa más común de que no quepa un juego de 50 GB no es la descarga, sino que la imagen userdata sigue
+   * con los 6/8 GB por defecto, y falla con INSTALL_INSUFFICIENT_STORAGE recién en la fase dexopt.
    */
   checkDiskFor(bytes) {
     const info = this.dataInfo() || {};
@@ -180,7 +180,7 @@ class BuiltinBackend extends Backend {
   async resetData() { return this.rt ? this.rt.resetAndroidData() : { ok: false }; }
 
   dispose() {
-    // 交给 Runtime.dispose()：它会保留 qemu 进程，下次启动可以直接接管
+    // Se delega a Runtime.dispose(): conserva el proceso qemu para tomarlo en el próximo arranque
   }
 
   diagnose() {
