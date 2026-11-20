@@ -14,7 +14,7 @@ const doctor = require('./doctor');
 const { download, downloadAny, downloadAnyParallel, downloadMulti, head, discardPartial } = require('./download');
 const { ZipArchive, ZipFile, resolveZipEntry } = require('./zip');
 const { Sources } = require('./sources');
-const { cmpVer } = require('./version');
+const { cmpVer, isReleaseTag, nameHasVersion } = require('./version');
 
 const IS_WIN = process.platform === 'win32';
 
@@ -587,7 +587,10 @@ class Provisioner {
       if (!item.list) continue;
       for (const rel of item.list) {
         if (!rel || rel.draft) continue;
-        const hit = (rel.assets || []).find((x) => /^LanzadorAPK-runtime-.*\.zip$/i.test(x.name || ''));
+        const relTag = String(rel.tag_name || rel.name || '');
+        if (!isReleaseTag(relTag)) continue; // etiqueta mal escrita (p. ej. v0.71): no cuenta como versión
+        const hits = (rel.assets || []).filter((x) => /^LanzadorAPK-runtime-.*\.zip$/i.test(x.name || ''));
+        const hit = hits.find((x) => nameHasVersion(x.name, relTag)) || hits[0];
         if (!hit) continue;
         cands.push({
           url: hit.browser_download_url || hit.url,

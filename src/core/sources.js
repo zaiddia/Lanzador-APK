@@ -17,7 +17,7 @@
 const https = require('https');
 const http = require('http');
 const { URL } = require('url');
-const { cmpVer } = require('./version');
+const { cmpVer, isReleaseTag } = require('./version');
 const { PRODUCT } = require('./brand');
 const { parseDigest, parseSums } = require('./integrity');
 
@@ -334,7 +334,8 @@ class Sources {
         this._blocked.set(x.source, Date.now() + this._blockMs);
       }
     }
-    const ok = all.filter((x) => x && x.rel);
+    // Releases con etiqueta mal escrita (p. ej. «v0.71» en vez de «v0.7.1») se ignoran: compararían como versión más alta
+    const ok = all.filter((x) => x && x.rel && isReleaseTag(x.rel.tag_name || x.rel.name));
     if (!ok.length) {
       const why = all.map((x) => `${x.name || x.source}: ${x.error || 'sin datos'}`).join(';');
       // Todo falló pero hay un resultado anterior: mejor dar información de versión «quizá vieja»

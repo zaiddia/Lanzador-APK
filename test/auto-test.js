@@ -1624,6 +1624,33 @@ const { AdbClient, friendlyInstallError, friendlyLaunchError } = require('../src
     assert(m.assets.length === 1 && m.assets[0].url === 'gh://a', 'Un recurso con el mismo nombre de una versión vieja no puede sustituir al de la nueva');
   });
 
+  await test('Fuentes: una etiqueta mal escrita (v0.71 por v0.7.1) no cuenta como versión más alta', async () => {
+    const { Sources } = require('../src/core/sources');
+    const s = new Sources(() => ({ runtime: {} }));
+    s.fetchReleases = async () => [
+      { source: 'github', name: 'GitHub', web: 'g', rel: { tag_name: 'v0.71', assets: [{ name: 'LanzadorAPK-v0.71-win64-portable.zip', size: 10, browser_download_url: 'gh://bad' }] } },
+      { source: 'github', name: 'GitHub', web: 'g', rel: { tag_name: 'v0.7.1', assets: [{ name: 'LanzadorAPK-v0.7.1-win64-portable.zip', size: 10, browser_download_url: 'gh://ok' }] } },
+    ];
+    const m = await s.latest();
+    assert(m.version === '0.7.1', `Debería ignorar v0.71; real: ${m.version}`);
+    assert(m.assets.length === 1 && m.assets[0].url === 'gh://ok', JSON.stringify(m.assets));
+  });
+
+  await test('Actualizador: con dos paquetes portátiles en el release se elige el que lleva la versión exacta', async () => {
+    const { Updater } = require('../src/core/updater');
+    const u = new Updater({ currentVersion: '0.7.0', exePath: path.join(os.tmpdir(), 'no-existe', 'LanzadorAPK.exe'), isPackaged: true, dataDir: os.tmpdir() });
+    u.sources.latest = async () => ({
+      version: '0.7.1', tag: 'v0.7.1', web: 'w', sources: [],
+      assets: [
+        { name: 'LanzadorAPK-v0.71-win64-portable.zip', url: 'gh://bad', urls: ['gh://bad'], size: 10 },
+        { name: 'LanzadorAPK-v0.7.1-win64-portable.zip', url: 'gh://ok', urls: ['gh://ok'], size: 10 },
+        { name: 'LanzadorAPK-runtime-v0.7.1.zip', url: 'gh://rt', urls: ['gh://rt'], size: 10 },
+      ],
+    });
+    const r = await u.check();
+    assert(r.hasUpdate && r.asset && r.asset.name === 'LanzadorAPK-v0.7.1-win64-portable.zip', JSON.stringify(r.asset));
+  });
+
   await test('Agente de ventanas: scope une carpetas con punto y coma y filtra vacíos (la única entrada para decidir a quién pertenece una ventana)', async () => {
     const { WinAgent } = require('../src/core/agent');
     const a = new WinAgent();

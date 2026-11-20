@@ -33,4 +33,21 @@ function cmpVer(a, b) {
   return 0;
 }
 
-module.exports = { parseVer, cmpVer };
+/**
+ * Si una etiqueta de release tiene la forma de versión que usa Lanzador APK: vX.Y.Z (con sufijo opcional -beta / +build).
+ * Protege contra etiquetas mal escritas como «v0.71» (por v0.7.1): se leerían como versión 0.71, más alta que cualquier 0.7.x,
+ * y la app avisaría de una actualización para siempre y dejaría de ofrecer las versiones siguientes.
+ */
+function isReleaseTag(v) {
+  return /^v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(String(v || '').trim());
+}
+
+/** Si un nombre de archivo lleva exactamente esta versión (0.7.1 → «…-v0.7.1-…» o «…-0.7.1-…», no «0.7.10»). */
+function nameHasVersion(name, version) {
+  const v = String(version || '').replace(/^v/i, '');
+  if (!v) return false;
+  const esc = v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(^|[^0-9.])v?${esc}(?![0-9]|\\.[0-9])`, 'i').test(String(name || ''));
+}
+
+module.exports = { parseVer, cmpVer, isReleaseTag, nameHasVersion };

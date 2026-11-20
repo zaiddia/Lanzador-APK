@@ -20,7 +20,7 @@ const { spawn } = require('child_process');
 const { downloadAnyParallel, downloadMulti } = require('./download');
 const { verifyFile } = require('./integrity');
 const { ZipFile, resolveZipEntry } = require('./zip');
-const { cmpVer } = require('./version');
+const { cmpVer, nameHasVersion } = require('./version');
 const { Sources } = require('./sources');
 
 const { OWNER, REPO } = require('./brand');
@@ -95,7 +95,11 @@ class Updater {
    */
   async check(opts = {}) {
     const merged = await this.sources.latest({ force: !!opts.force });
-    const pick = (re) => merged.assets.find((a) => re.test(String(a.name || '')));
+    // Si hay varios archivos que coinciden (p. ej. uno con un nombre de versión mal escrito), se prefiere el que lleva la versión exacta
+    const pick = (re) => {
+      const hits = merged.assets.filter((a) => re.test(String(a.name || '')));
+      return hits.find((a) => nameHasVersion(a.name, merged.version)) || hits[0];
+    };
     // La versión publicada trae a la vez el «paquete portátil» y el «paquete del runtime» (LanzadorAPK-runtime-*.zip).
     // La coincidencia .zip de respaldo debe excluir el paquete del runtime: si una versión solo tuviera el runtime
     // y no el portátil, la lógica anterior lo descomprimiría en la carpeta del programa como actualización (1,5 GB de archivos de más y el programa roto).
