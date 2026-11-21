@@ -170,6 +170,10 @@ const DEFAULT_SETTINGS = {
     density: 0,              // 0 = se deduce de la resolución
     rememberBounds: true,    // Recuerda la posición/tamaño de la ventana de cada app
     autoFullscreenOnLaunch: false,
+    // Barra de controles flotante junto a la ventana de la app (Atrás / Inicio / Apps abiertas / Captura / Girar / Cerrar)
+    controlBar: true,
+    // Botones de navegación de Android dentro de la pantalla (en vez de gestos). Opcional: ocupa una franja abajo
+    navButtons: false,
     // Horizontal = cambiar la pantalla física del AVD a 1280x720 y reiniciar (la única forma de tenerla derecha y llena).
     // Se guarda aquí; tras reiniciar LanzadorAPK se arranca con esta orientación.
     landscape: false,

@@ -284,6 +284,22 @@
           <span class="sub">Con esto activado, cada app se abre llenando la pantalla sin pulsar F11. Funciona mejor junto con «horizontal» abajo: la pantalla horizontal ya tiene la proporción del monitor y no deja bordes negros.</span>
         </div>
         <div class="field">
+          <label>Barra de controles</label>
+          <select id="setControlBar">
+            <option value="on">Mostrar junto a la ventana de la app (recomendado)</option>
+            <option value="off">Ocultar</option>
+          </select>
+          <span class="sub">Una barra pequeña al costado de la app con Atrás, Inicio, Apps abiertas, Captura de pantalla, Girar, Pantalla completa, Minimizar y Cerrar la app. Solo aparece mientras usas la app.</span>
+        </div>
+        <div class="field">
+          <label>Botones de navegación de Android</label>
+          <select id="setNavButtons">
+            <option value="off">Gestos (como viene Android)</option>
+            <option value="on">Tres botones abajo: Atrás · Inicio · Apps abiertas</option>
+          </select>
+          <span class="sub">Los botones quedan dentro de la pantalla de Android, también en el modo incrustado. Ocupan una franja abajo.</span>
+        </div>
+        <div class="field">
           <label>Orientación de la pantalla</label>
           <select id="setOrientationMode">
             <option value="auto">Según la app (recomendado · elige horizontal o vertical y llena la pantalla sin bordes)</option>
@@ -724,6 +740,7 @@
           <button class="btn ghost sm" id="btnAndroidLocale">Ajustes de idioma</button>
           <button class="btn ghost sm" id="btnAndroidKeyboard" title="Elige «Español (Latinoamérica)» para que la ñ y las tildes del teclado de tu PC salgan bien">Teclado físico</button>
           <button class="btn ghost sm" id="btnAndroidApps">Administrar apps</button>
+          <button class="btn ghost sm" id="btnCloseAllApps" title="Cierra la app abierta y las que quedaron en segundo plano; Android sigue listo">Cerrar todas las apps</button>
         </div>
       </div>
 

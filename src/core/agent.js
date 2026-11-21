@@ -215,6 +215,14 @@ class WinAgent extends EventEmitter {
   async rotate(dir = 'left') { return this.call({ cmd: 'rotate', dir }, 8000); }
   async hide() { return this.call({ cmd: 'hide' }, 3000); }
   async show() { return this.call({ cmd: 'show' }, 3000); }
+  /** Minimiza la ventana nativa del emulador a la barra de tareas (show() la restaura) */
+  async minimize() { return this.call({ cmd: 'minimize' }, 3000); }
+  /**
+   * Posición y estado de la ventana del emulador para la barra de controles flotante.
+   * @param {number} barHwnd HWND de la barra (para contar como «en uso» cuando el primer plano es la propia barra)
+   * @returns {Promise<{ok, emu, x, y, w, h, visible, iconic, fg}>} rectángulo en píxeles físicos
+   */
+  async track(barHwnd = 0) { return this.call({ cmd: 'track', bar: Number(barHwnd) || 0 }, 2000); }
   /** Avisa al agente que entre en modo de baja latencia: reduce mucho la frecuencia de escaneo de ventanas y deja la CPU para el renderizado de Android */
   async setPerformanceMode(on) { return this.call({ cmd: 'perf', on: on ? 1 : 0 }, 3000); }
   /** @param {boolean} keep true = cambia a modo de ventana independiente (no ocultar la ventana del emulador y conservar el identificador) */

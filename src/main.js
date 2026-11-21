@@ -1084,6 +1084,15 @@ function buildTray() {
         },
       },
       {
+        label: 'Cerrar todas las apps de Android',
+        click: () => {
+          closeAllApps().then((r) => {
+            refresh();
+            if (r && r.ok) notify('Apps cerradas', 'Se cerraron las apps de Android abiertas; Android sigue listo para abrir la próxima al instante.');
+          });
+        },
+      },
+      {
         label: wantLandscapeFor(currentAppPkg) ? 'Volver a vertical (reinicia el runtime)' : 'Cambiar a horizontal (reinicia el runtime)',
         enabled: !!currentAppPkg,
         click: () => { rotateCurrentApp().catch(() => {}); },
@@ -1520,6 +1529,30 @@ async function stopApp(pkg, opts = {}) {
     return { ok: true, pkg: target };
   } catch (e) {
     appLog(`stop failed: ${e.message}`);
+    return { ok: false, error: e.message };
+  }
+}
+
+/**
+ * Cierra todas las apps Android abiertas (la de la ventana y las que quedaron en segundo plano), sin apagar Android:
+ * la próxima app sigue abriendo al instante. Solo toca apps instaladas por el usuario (nunca paquetes del sistema).
+ */
+async function closeAllApps() {
+  try {
+    if (currentAppPkg) await stopApp(currentAppPkg).catch(() => {});
+    if (!runtime) return { ok: true, closed: 0 };
+    const client = runtime.client();
+    if (!(await client.isOnline().catch(() => false))) return { ok: true, closed: 0 };
+    const { validPackageName } = require('./core/pkgname');
+    const { isSystemPackage } = require('./core/container');
+    const pkgs = store.getApps().map((a) => a.package).filter((p) => validPackageName(p) && !isSystemPackage(p));
+    const cmds = pkgs.map((p) => `am force-stop ${p}`);
+    cmds.push('am kill-all');
+    await client.shell(cmds.join('; '), { timeout: 30000 }).catch(() => {});
+    try { send('apps:changed'); } catch (_) { /* ignore */ }
+    appLog(`close all apps (${pkgs.length})`);
+    return { ok: true, closed: pkgs.length };
+  } catch (e) {
     return { ok: false, error: e.message };
   }
 }
@@ -2716,6 +2749,35 @@ function registerIpc() {
 
   ipcMain.handle('shell:back', async () => { await runtime.client().keyBack(); });
   ipcMain.handle('shell:forward', async () => { await runtime.client().keyForward(); });
+  ipcMain.handle('shell:nav', async (_e, key) => {
+    const c = runtime.client();
+    if (key === 'home') await c.keyHome();
+    else if (key === 'recents') await c.keyRecents();
+    else if (key === 'back') await c.keyBack();
+    else return { ok: false };
+    return { ok: true };
+  });
+  // Captura de la pantalla de Android → Imágenes\Lanzador APK\<app> <fecha>.png
+  ipcMain.handle('shell:screenshot', async () => {
+    try {
+      const png = await runtime.client().screenshot();
+      if (!png || png.length < 100 || png.readUInt32BE(0) !== 0x89504e47) throw new Error('la captura salió vacía');
+      const dir = path.join(app.getPath('pictures'), 'Lanzador APK');
+      fs.mkdirSync(dir, { recursive: true });
+      const label = String((appWin && appWin.state && appWin.state.label) || 'Android').replace(/[\\/:*?"<>|]+/g, '_').slice(0, 60);
+      const d = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}.${pad(d.getMinutes())}.${pad(d.getSeconds())}`;
+      const file = path.join(dir, `${label} ${stamp}.png`);
+      fs.writeFileSync(file, png);
+      appLog(`screenshot: ${file}`);
+      notify('Captura guardada', file);
+      return { ok: true, file };
+    } catch (e) {
+      notify('No se pudo hacer la captura', e.message);
+      return { ok: false, error: e.message };
+    }
+  });
 
   // ---------------- Ajustes del sistema Android (sin entrar al escritorio de Android) ----------------
 
@@ -2741,6 +2803,16 @@ function registerIpc() {
     try { return { ok: true, ...(await androidSet.open(action)) }; } catch (e) { return { ok: false, error: e.message }; }
   });
 
+  // Botones de navegación de Android: se guarda y, si Android ya está en marcha, se aplica al momento
+  ipcMain.handle('android:navButtons', async (_e, on) => {
+    store.saveSettings({ display: { navButtons: !!on } });
+    try {
+      if (!(await runtime.client().isOnline())) return { ok: true, applied: false };
+      const r = await runtime.client().setNavButtons(!!on);
+      return { ok: r.ok, applied: r.ok, error: r.ok ? '' : r.out };
+    } catch (e) { return { ok: true, applied: false, error: e.message }; }
+  });
+
   ipcMain.handle('android:tune', async (_e, pkg) => {
     try { return { ok: true, ...(await androidSet.tune({ pkg })) }; } catch (e) { return { ok: false, error: e.message }; }
   });
@@ -2752,6 +2824,8 @@ function registerIpc() {
   ipcMain.handle('android:grantAll', async (_e, pkg) => {
     try { return { ok: true, ...(await androidSet.grantAll(pkg)) }; } catch (e) { return { ok: false, error: e.message }; }
   });
+
+  ipcMain.handle('apps:closeAll', () => closeAllApps());
 
   ipcMain.handle('app:foreground', () => {
     if (appWin && appWin.isOpen) { appWin.win.show(); appWin.win.focus(); return true; }
@@ -2995,6 +3069,8 @@ if (!gotLock) {
       pointerConfig: () => pointer.pointerOptions(store.getSettings()),
       // La ventana de imagen la busca el agente por ámbito de proceso (la ventana del emulator integrado la lanzamos nosotros)
       windowTargets: () => null,
+      // Barra de controles flotante del modo de ventana independiente (se puede desactivar en Configuración)
+      controlBar: () => store.getSettings().display.controlBar !== false,
     });
     appWin.onCloseApp((pkg) => {
       // Cerrar la ventana = detener esa app; al cerrar la última ventana el contenedor queda en reposo (baja prioridad, deja de sondear),

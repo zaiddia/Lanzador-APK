@@ -82,6 +82,7 @@ public class ApkAgent
     [DllImport("user32.dll")] static extern bool ScreenToClient(IntPtr h, ref POINT p);
     [DllImport("user32.dll")] static extern IntPtr GetAncestor(IntPtr h, uint flags);
     [DllImport("user32.dll")] static extern bool IsWindow(IntPtr h);
+    [DllImport("user32.dll")] static extern bool IsIconic(IntPtr h);
     [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
     [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
     [DllImport("ntdll.dll")] static extern int NtQueryInformationProcess(IntPtr h, int cls, ref PBI pbi, int len, out int ret);
@@ -1284,7 +1285,8 @@ public class ApkAgent
                         // así que aquí hay que volver a buscarla; si no, show/layout actuarían sobre un identificador vacío,
                         // con el síntoma «tras cambiar a ventana independiente desaparece la ventana del emulador».
                         if (_emu == IntPtr.Zero) _emu = FindEmulator();
-                        if (_emu != IntPtr.Zero) ShowWindow(_emu, 5);
+                        // Si estaba minimizada (botón «Minimizar» de la barra de controles) SW_SHOW no la restaura: hace falta SW_RESTORE
+                        if (_emu != IntPtr.Zero) ShowWindow(_emu, IsIconic(_emu) ? 9 : 5);
                         Reply(sock, "{\"ok\":" + (_emu != IntPtr.Zero ? "true" : "false") + "}");
                     }
                     else if (cmd == "detach")
@@ -1371,6 +1373,41 @@ public class ApkAgent
                         _optSide = L(line, "side") == 1 ? 1 : 0;
                         if (L(line, "on") == 1) HookOn(); else HookOff();
                         Reply(sock, "{\"ok\":true,\"hooked\":" + (_hook != IntPtr.Zero ? "true" : "false") + "}");
+                    }
+                    else if (cmd == "minimize")
+                    {
+                        // Minimiza a la barra de tareas (a diferencia de hide, que la oculta del todo y solo se recupera desde la bandeja)
+                        if (_emu == IntPtr.Zero) _emu = FindEmulator();
+                        if (_emu != IntPtr.Zero) ShowWindow(_emu, 6);
+                        Reply(sock, "{\"ok\":" + (_emu != IntPtr.Zero ? "true" : "false") + "}");
+                    }
+                    else if (cmd == "track")
+                    {
+                        // Para la barra de controles flotante: dónde está la ventana del emulador y si se está usando.
+                        // fg=1 si el primer plano es el emulador o la propia barra (bar = su HWND), para ocultar la barra
+                        // cuando el usuario pasa a otro programa.
+                        IntPtr e = _emu != IntPtr.Zero && IsWindow(_emu) ? _emu : FindEmulator();
+                        long bar = L(line, "bar");
+                        RECT r = new RECT();
+                        bool vis = false, icon = false, fgOk = false;
+                        if (e != IntPtr.Zero)
+                        {
+                            GetWindowRect(e, out r);
+                            vis = IsWindowVisible(e);
+                            icon = IsIconic(e);
+                            IntPtr fg = GetForegroundWindow();
+                            if (fg != IntPtr.Zero)
+                            {
+                                IntPtr root = GetAncestor(fg, 2);
+                                fgOk = fg == e || root == e || (bar != 0 && (fg.ToInt64() == bar || root.ToInt64() == bar));
+                            }
+                        }
+                        Reply(sock, "{\"ok\":true,\"emu\":" + e.ToInt64()
+                            + ",\"x\":" + r.L + ",\"y\":" + r.T
+                            + ",\"w\":" + (r.R - r.L) + ",\"h\":" + (r.B - r.T)
+                            + ",\"visible\":" + (vis ? "true" : "false")
+                            + ",\"iconic\":" + (icon ? "true" : "false")
+                            + ",\"fg\":" + (fgOk ? "true" : "false") + "}");
                     }
                     else if (cmd == "probe")
                     {

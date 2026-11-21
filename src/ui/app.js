@@ -803,6 +803,13 @@ function bindAndroid() {
   $('btnAndroidLocale').addEventListener('click', () => open('locale'));
   if ($('btnAndroidKeyboard')) $('btnAndroidKeyboard').addEventListener('click', () => open('keyboard'));
   $('btnAndroidApps').addEventListener('click', () => open('apps'));
+  if ($('btnCloseAllApps')) {
+    $('btnCloseAllApps').addEventListener('click', async () => {
+      const r = await api.closeAllApps().catch((e) => ({ ok: false, error: e.message }));
+      if (r && r.ok) toast({ title: 'Apps cerradas', body: r.closed ? `Se cerraron las apps de Android (${r.closed} revisadas)` : 'No había apps abiertas', type: 'ok' });
+      else toast({ title: 'No se pudieron cerrar las apps', body: (r && r.error) || '', type: 'error' });
+    });
+  }
 }
 
 /** Sincronización de campos de la configuración: solo queda el runtime integrado, así que se muestran todos los recursos sin cambiar según el backend */
@@ -1059,6 +1066,8 @@ function fillSettings(s) {
   if ($('setKeepSnapshot')) $('setKeepSnapshot').checked = eng.keepSnapshot !== false;
   $('setDisplayMode').value = d.mode === 'fullscreen' ? 'fullscreen' : 'window';
   if ($('setAutoFullscreen')) $('setAutoFullscreen').value = d.autoFullscreenOnLaunch === true ? 'on' : 'off';
+  if ($('setControlBar')) $('setControlBar').value = d.controlBar === false ? 'off' : 'on';
+  if ($('setNavButtons')) $('setNavButtons').value = d.navButtons === true ? 'on' : 'off';
   if ($('setLandscape')) $('setLandscape').value = d.landscape === true ? 'landscape' : 'portrait';
   if ($('setOrientationMode')) $('setOrientationMode').value = d.orientationMode || 'auto';
   if ($('setAutoRotate')) $('setAutoRotate').value = d.autoRotate === false ? 'off' : 'on';
@@ -1775,6 +1784,23 @@ function bindSettings() {
       const on = e.target.value === 'on';
       state.settings = await api.setSettings({ display: { autoFullscreenOnLaunch: on } });
       toast({ title: on ? 'Pantalla completa automática activada' : 'Pantalla completa automática desactivada', body: 'Se aplica la próxima vez que abras una app', type: 'ok' });
+    });
+  }
+  if ($('setControlBar')) {
+    $('setControlBar').addEventListener('change', async (e) => {
+      const on = e.target.value === 'on';
+      state.settings = await api.setSettings({ display: { controlBar: on } });
+      toast({ title: on ? 'Barra de controles activada' : 'Barra de controles oculta', body: 'Se aplica la próxima vez que abras una app', type: 'ok' });
+    });
+  }
+  if ($('setNavButtons')) {
+    $('setNavButtons').addEventListener('change', async (e) => {
+      const on = e.target.value === 'on';
+      const r = await api.android.navButtons(on).catch((err) => ({ ok: false, error: err.message }));
+      state.settings = await api.getSettings();
+      if (r && r.applied) toast({ title: on ? 'Botones de navegación activados' : 'Navegación por gestos activada', type: 'ok' });
+      else if (r && r.ok) toast({ title: 'Guardado', body: 'Se aplica la próxima vez que arranque Android', type: 'ok' });
+      else toast({ title: 'No se pudo cambiar la navegación', body: (r && r.error) || '', type: 'error' });
     });
   }
   if ($('setOrientationMode')) {

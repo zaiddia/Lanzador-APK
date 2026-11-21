@@ -933,6 +933,20 @@ class AdbClient {
 
   async keyBack() { return this._key(4); }
   async keyForward() { return this._key(125); }
+  async keyHome() { return this._key(3); }
+  /**
+   * Navegación de Android con 3 botones (Atrás / Inicio / Apps abiertas) o con gestos.
+   * Se cambia con los overlays oficiales de SystemUI; queda guardado en Android (no hace falta repetirlo en cada arranque).
+   */
+  async setNavButtons(on) {
+    const overlay = on ? 'com.android.internal.systemui.navbar.threebutton' : 'com.android.internal.systemui.navbar.gestural';
+    const list = await this.shell('cmd overlay list android 2>/dev/null; cmd overlay list 2>/dev/null | grep navbar', { timeout: 10000 }).catch(() => '');
+    if (!list.includes(overlay)) return { ok: false, out: 'esta imagen no trae el modo de navegación pedido' };
+    const out = await this.shell(`cmd overlay enable-exclusive --category ${overlay}`, { timeout: 10000 }).catch((e) => String(e.message || e));
+    return { ok: !/Error|Exception|Unknown|denied/i.test(out || ''), out: String(out || '').trim() };
+  }
+  /** Pantalla de apps abiertas (desde ahí se cierran deslizando hacia arriba o con «Borrar todo») */
+  async keyRecents() { return this._key(187); }
 
   /**
    * Cambia entre «diseño de teléfono / diseño de tableta».

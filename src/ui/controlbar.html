@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'" />
+<title>Controles de Lanzador APK</title>
+<link rel="stylesheet" href="controlbar.css" />
+</head>
+<body>
+<nav class="rail" id="rail">
+  <button class="b" data-act="back" title="Atrás">
+    <svg viewBox="0 0 24 24"><path d="M15 5 8 12l7 7"/></svg>
+  </button>
+  <button class="b" data-act="home" title="Inicio de Android">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6.5"/></svg>
+  </button>
+  <button class="b" data-act="recents" title="Apps abiertas (desliza una hacia arriba para cerrarla)">
+    <svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+  </button>
+  <i class="sep"></i>
+  <button class="b" data-act="screenshot" title="Captura de pantalla (se guarda en Imágenes › Lanzador APK)">
+    <svg viewBox="0 0 24 24"><path d="M4 8.5A1.5 1.5 0 0 1 5.5 7H8l1.5-2h5L16 7h2.5A1.5 1.5 0 0 1 20 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z"/><circle cx="12" cy="13" r="3.3"/></svg>
+  </button>
+  <i class="sep"></i>
+  <button class="b" data-act="rotate" title="Horizontal / vertical">
+    <svg viewBox="0 0 24 24"><path d="M4 8V6a2 2 0 0 1 2-2h8"/><path d="M17.5 1.5 21 5l-3.5 3.5"/><path d="M20 16v2a2 2 0 0 1-2 2H10"/><path d="M6.5 22.5 3 19l3.5-3.5"/></svg>
+  </button>
+  <button class="b" data-act="maximize" title="Pantalla completa / restaurar">
+    <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+  </button>
+  <i class="sep"></i>
+  <button class="b" data-act="minimize" title="Minimizar">
+    <svg viewBox="0 0 24 24"><path d="M6 12h12"/></svg>
+  </button>
+  <button class="b close" data-act="close" title="Cerrar la app">
+    <svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7 7 17"/></svg>
+  </button>
+</nav>
+<script src="controlbar.js"></script>
+</body>
+</html>

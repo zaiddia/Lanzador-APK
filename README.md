@@ -13,6 +13,7 @@
 - **Doble clic en un APK para instalarlo.** Asocia los archivos `.apk`; al abrir uno se analiza, se instala y se crea el acceso directo, sin abrir la interfaz de un emulador.
 - **Un icono por app.** Extrae el icono real del APK, crea accesos directos en el escritorio y en el menú Inicio, y cada app aparece por separado en la barra de tareas.
 - **Cada app en su ventana.** Por dentro usa el emulador oficial de Android (Android Emulator + imagen Android 14 de Google). La ventana toma el nombre y el icono de la app y se ajusta a vertical u horizontal según el APK.
+- **Barra de controles.** Junto a la ventana de cada app aparece una barra pequeña con Atrás, Inicio, Apps abiertas (desde ahí se cierran deslizándolas hacia arriba), Captura de pantalla, Girar, Pantalla completa, Minimizar y Cerrar la app. Opcionalmente, Android puede mostrar sus propios tres botones de navegación abajo.
 - **Carpeta compartida.** `%USERPROFILE%\LanzadorAPKShared` se sincroniza en ambos sentidos con `/sdcard/LanzadorAPKShared` dentro de Android.
 - **Se recupera sola.** Si una app se cierra al abrir, reintenta, restablece sus datos o le concede permisos; si el arranque falla, prueba configuraciones más conservadoras.
 - **Diagnóstico integrado.** Revisa virtualización, tarjeta gráfica, memoria, disco y conexión, y ofrece reparaciones con un clic.
@@ -20,7 +21,7 @@
 ## Requisitos
 
 - Windows 10 2004 (build 19041) o superior, 64 bits.
-- 8 GB de RAM como mínimo (recomendado 16 GB) y unos 10 GB libres en disco.
+- 8 GB de RAM como mínimo (recomendado 16 GB) y unos 12–15 GB libres en disco (pueden estar en otro disco que C:).
 - Virtualización activada en la BIOS (Intel VT-x o AMD SVM) y la característica **Plataforma del hipervisor de Windows**. Sin ella funciona, pero con emulación por software, mucho más lenta.
 
 ## Descargar

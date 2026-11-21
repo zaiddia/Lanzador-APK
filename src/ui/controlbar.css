@@ -1,0 +1,33 @@
+/* Barra de controles flotante junto a la ventana del emulador (modo de ventana independiente) */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 100%; height: 100%; background: transparent; overflow: hidden; user-select: none; }
+.rail {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0;
+  gap: 0;
+  background: rgba(22, 24, 28, .94);
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 12px;
+}
+.b {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #c9ced6;
+  cursor: default;
+  transition: background .12s, color .12s;
+}
+.b svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.b:hover { background: rgba(255, 255, 255, .10); color: #fff; }
+.b:active { background: rgba(255, 255, 255, .18); }
+.b.close:hover { background: #c4423b; color: #fff; }
+.b.busy { opacity: .45; }
+.sep { display: block; width: 22px; height: 1px; margin: 4px 0; background: rgba(255, 255, 255, .12); }

@@ -39,6 +39,8 @@ const SETTINGS = {
   autoStart: true,
   notifyOnInstall: true,
   debug: { auto: true, intervalMin: 10, notify: true },
+  // Sin la tarjeta de bienvenida: si no, tapa la configuración en las capturas
+  welcome: { lastDate: '', disabled: true },
 };
 
 const DEBUG_ISSUES = [
@@ -156,6 +158,10 @@ app.whenReady().then(async () => {
   step('El resaltado de la navegación cambia también', afterSwitch.on === 'display', `Resaltado: ${afterSwitch.on}`);
 
   await win.capturePage().then((img) => fs.writeFileSync(path.join(OUT, 'settings-display.png'), img.toPNG()));
+  // Las opciones de la barra de controles y de los botones de navegación están en esta categoría
+  await win.webContents.executeJavaScript("(document.getElementById('setControlBar')||document.body).scrollIntoView({block:'center'}); true;");
+  await new Promise((r) => setTimeout(r, 300));
+  await win.capturePage().then((img) => fs.writeFileSync(path.join(OUT, 'settings-display-controls.png'), img.toPNG()));
 
   // Pulsar «Diagnóstico y reparación» y mirar el panel de comprobación automática
   await evalJs(`document.querySelector('#setNav .set-nav-item[data-cat="diag"]').click()`);

@@ -28,8 +28,20 @@ function iconUrl(p) {
 }
 
 class AppWindow {
-  constructor({ agent, setOrientation, mouseHook = false, pointerConfig = null, windowTargets = null }) {
+  constructor({ agent, setOrientation, mouseHook = false, pointerConfig = null, windowTargets = null, controlBar = null }) {
     this.agent = agent;
+    // Barra de controles flotante del modo de ventana independiente (Atrás / Inicio / Apps abiertas / Cerrar…).
+    // controlBar es un getter del interruptor de Configuración; null = sin barra (pruebas).
+    this.controlBar = null;
+    if (typeof controlBar === 'function') {
+      const { ControlBar } = require('./controlbar');
+      this.controlBar = new ControlBar({
+        agent,
+        enabled: controlBar,
+        preload: path.join(__dirname, '..', 'preload.js'),
+        page: path.join(__dirname, '..', 'ui', 'controlbar.html'),
+      });
+    }
     this.setOrientation = setOrientation || null;
     // Origen de los identificadores candidatos de la ventana de imagen: ahora solo hay un backend, siempre null;
     // el agente de ventanas los busca por ámbito de proceso (todas esas ventanas las crea el emulator que lanzamos).
@@ -418,7 +430,11 @@ class AppWindow {
     this._detachedDebug += ` layout=${JSON.stringify(lay)}`;
     this.lastEmbedError = this._detachedDebug;
     this.lastEmbedOk = false;
-    return !!(lay && lay.ok !== false);
+    const placed = !!(lay && lay.ok !== false);
+    if (placed && this.controlBar) {
+      try { this.controlBar.attach(title); } catch (_) { /* sin barra la app sigue funcionando (bandeja / menú) */ }
+    }
+    return placed;
   }
 
   async embed() {
@@ -616,7 +632,11 @@ class AppWindow {
     if (!this.isOpen) return;
     // Modo de ventana independiente: lo que se minimiza es la ventana nativa del emulador (agent.hide la oculta),
     // no la ventana contenedora invisible.
-    if (this.detachedMode) { this.agent.hide().catch(() => {}); return; }
+    // Se minimiza a la barra de tareas (antes se ocultaba del todo y solo se recuperaba desde la bandeja o volviendo a abrir la app)
+    if (this.detachedMode) {
+      this.agent.minimize().catch(() => this.agent.hide().catch(() => {}));
+      return;
+    }
     this.win.minimize();
   }
 
@@ -628,6 +648,7 @@ class AppWindow {
    * y en el escritorio del usuario aparece de la nada una ventana negra "Android Emulator - lanzadorapk5554".
    */
   close({ keepApp = false } = {}) {
+    if (this.controlBar) this.controlBar.detach();
     if (!this.isOpen) return;
     const win = this.win;
     const pkg = this.pkg;

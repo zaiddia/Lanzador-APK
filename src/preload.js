@@ -117,6 +117,7 @@ contextBridge.exposeInMainWorld('lanzadorapk', {
   winClose: () => invoke('window:close'),
   winHide: () => invoke('window:hide'),
   bringAppToFront: () => invoke('app:foreground'),
+  closeAllApps: () => invoke('apps:closeAll'),
 
   // Interfaces que usa la ventana de app (solo rotar / minimizar / maximizar / cerrar)
   shell: {
@@ -127,6 +128,9 @@ contextBridge.exposeInMainWorld('lanzadorapk', {
     rotate: () => invoke('shell:rotate'),
     back: () => invoke('shell:back'),
     forward: () => invoke('shell:forward'),
+    // Barra de controles flotante: 'home' | 'recents'
+    nav: (key) => invoke('shell:nav', key),
+    screenshot: () => invoke('shell:screenshot'),
     keyEvent: (key) => invoke('shell:keyEvent', key),
     onState: (cb) => {
       const handler = (_e, payload) => cb(payload);
@@ -138,6 +142,7 @@ contextBridge.exposeInMainWorld('lanzadorapk', {
   // Ajustes del sistema Android (WiFi / volumen / pantalla / animaciones / permisos …)
   android: {
     status: () => invoke('android:status'),
+    navButtons: (on) => invoke('android:navButtons', on),
     set: (key, value) => invoke('android:set', { key, value }),
     open: (action) => invoke('android:open', action),
     tune: (pkg) => invoke('android:tune', pkg),

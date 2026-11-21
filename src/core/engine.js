@@ -676,6 +676,18 @@ class Runtime {
         this.log(`Se omitió la configuración de idioma: ${e.message}`);
       }
     }
+    // Botones de navegación de Android (Atrás / Inicio / Apps abiertas) dentro de la pantalla. Opcional (Configuración →
+    // Pantalla y ventana); por defecto la imagen usa gestos. Solo se fuerza si está activado: el estado queda guardado en Android.
+    const disp = (this.settings && this.settings.display) || {};
+    if (disp.navButtons === true && !this._navReady) {
+      try {
+        const r = await client.setNavButtons(true);
+        this._navReady = !!r.ok;
+        this.log(`Botones de navegación de Android: ${r.ok ? 'activados' : (r.out || 'no disponibles')}`);
+      } catch (e) {
+        this.log(`Botones de navegación omitidos: ${e.message}`);
+      }
+    }
     this.startWatchdog();
   }
 
