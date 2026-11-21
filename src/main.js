@@ -3071,6 +3071,7 @@ if (!gotLock) {
       windowTargets: () => null,
       // Barra de controles flotante del modo de ventana independiente (se puede desactivar en Configuración)
       controlBar: () => store.getSettings().display.controlBar !== false,
+      log: (m) => appLog(m),
     });
     appWin.onCloseApp((pkg) => {
       // Cerrar la ventana = detener esa app; al cerrar la última ventana el contenedor queda en reposo (baja prioridad, deja de sondear),

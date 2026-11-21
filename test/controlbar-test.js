@@ -87,9 +87,15 @@ function bar(agentTrack, opts = {}) {
     await cb._tick();
     const w = el.wins[0];
     assert(w.visible, 'visible al principio');
-    st = { ...st, fg: false };
+    st = { ...st, fg: false, covered: true };
     await cb._tick();
-    assert(!w.visible, 'con otro programa en primer plano se oculta');
+    assert(!w.visible, 'con otra ventana encima se oculta');
+    st = { ...st, fg: false, covered: false };
+    await cb._tick();
+    assert(w.visible, 'sin el foco pero a la vista (recién abierta desde un acceso directo) debe mostrarse');
+    st = { ...st, fg: false, covered: undefined };
+    await cb._tick();
+    assert(!w.visible, 'con un agente viejo que no informa covered, solo se muestra con el foco');
     st = { ...st, fg: true, iconic: true };
     await cb._tick();
     assert(!w.visible, 'minimizada se oculta');
@@ -97,6 +103,24 @@ function bar(agentTrack, opts = {}) {
     await cb._tick();
     assert(!w.visible, 'sin emulador se oculta');
     cb.detach();
+  });
+
+  await test('Registra en app.log por qué está oculta o visible (una línea por cambio, no cada 200 ms)', async () => {
+    const lines = [];
+    let st = { ok: true, emu: 1, x: 0, y: 0, w: 600, h: 1000, visible: true, iconic: false, fg: false, covered: true };
+    const el = fakeElectron();
+    const cb = new ControlBar({ agent: { track: async () => st }, enabled: () => true, preload: 'p', page: 'c', electron: el, platform: 'win32', log: (m) => lines.push(m) });
+    cb.attach('App');
+    await cb._tick();
+    await cb._tick();
+    st = { ...st, fg: true };
+    await cb._tick();
+    st = { ok: false, error: 'unknown cmd' };
+    await cb._tick();
+    cb.detach();
+    assert(lines.filter((l) => /oculta: otra ventana encima/.test(l)).length === 1, lines.join(' | '));
+    assert(lines.some((l) => /visible \(right/.test(l)), lines.join(' | '));
+    assert(lines.some((l) => /sin respuesta del agente \(unknown cmd\)/.test(l)), lines.join(' | '));
   });
 
   await test('Desactivada en Configuración / fuera de Windows: no se crea ninguna ventana', async () => {
@@ -147,6 +171,7 @@ function bar(agentTrack, opts = {}) {
     assert(/this\.agent\.minimize\(\)/.test(appwin), 'minimizar en modo independiente debe ir a la barra de tareas');
     const agent = read('src/core/win/agent.ps1');
     assert(/cmd == "track"/.test(agent) && /cmd == "minimize"/.test(agent) && /IsIconic\(_emu\) \? 9 : 5/.test(agent), 'faltan comandos del agente');
+    assert(/static bool CoveredByOther/.test(agent) && /fpid == epid/.test(agent), 'track debe mirar si la ventana está tapada y el foco por proceso');
     const store = require('../src/core/store');
     assert(store.DEFAULT_SETTINGS.display.controlBar === true && store.DEFAULT_SETTINGS.display.navButtons === false, 'valores por defecto');
     const html = read('src/ui/controlbar.html');

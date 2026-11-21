@@ -28,7 +28,7 @@ function iconUrl(p) {
 }
 
 class AppWindow {
-  constructor({ agent, setOrientation, mouseHook = false, pointerConfig = null, windowTargets = null, controlBar = null }) {
+  constructor({ agent, setOrientation, mouseHook = false, pointerConfig = null, windowTargets = null, controlBar = null, log = null }) {
     this.agent = agent;
     // Barra de controles flotante del modo de ventana independiente (Atrás / Inicio / Apps abiertas / Cerrar…).
     // controlBar es un getter del interruptor de Configuración; null = sin barra (pruebas).
@@ -40,6 +40,7 @@ class AppWindow {
         enabled: controlBar,
         preload: path.join(__dirname, '..', 'preload.js'),
         page: path.join(__dirname, '..', 'ui', 'controlbar.html'),
+        log,
       });
     }
     this.setOrientation = setOrientation || null;

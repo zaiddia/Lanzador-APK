@@ -1,7 +1,7 @@
 {
   "name": "lanzadorapk",
   "productName": "LanzadorAPK",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "description": "Ejecutor ligero de apps Android para Windows: doble clic en un APK para instalarlo; cada app se abre en su propia ventana con su icono en el escritorio",
   "main": "src/main.js",
   "author": "zaiddia",

@@ -10,7 +10,7 @@
  * Atrás · Inicio · Apps abiertas | Captura | Girar · Pantalla completa | Minimizar · Cerrar la app.
  *  - No toma el foco (focusable:false): pulsar un botón no quita el teclado a la app Android.
  *  - Sigue a la ventana del emulador (el agente informa su posición cada ~200 ms) y solo se ve cuando
- *    el emulador está visible y en primer plano; si el usuario pasa a otro programa, la barra se oculta.
+ *    el emulador está a la vista (con el foco, o sin otra ventana encima); si otro programa lo tapa, la barra se oculta.
  *  - Si no hay sitio a la derecha (pantalla completa, ventana pegada al borde), va a la izquierda o, si tampoco, encima
  *    del borde derecho de la imagen.
  * Los botones usan los mismos canales IPC que la barra de título del modo incrustado (shell:*), así que el comportamiento es idéntico.
@@ -50,7 +50,10 @@ class ControlBar {
    * @param {object} [o.electron] sustituto del módulo electron (pruebas)
    * @param {string} [o.platform]
    */
-  constructor({ agent, enabled, preload, page, electron = null, platform = process.platform }) {
+  constructor({ agent, enabled, preload, page, electron = null, platform = process.platform, log = null }) {
+    // Registro (app.log) de los cambios de estado: si la barra no aparece en un equipo, el registro dice por qué
+    this.log = typeof log === 'function' ? log : () => {};
+    this._state = '';
     this._electron = electron;
     this.platform = platform;
     this.agent = agent;
@@ -84,8 +87,9 @@ class ControlBar {
         focusable: false,
         alwaysOnTop: true,
         hasShadow: false,
-        transparent: true,
-        backgroundColor: '#00000000',
+        // Sin transparencia: con la aceleración por hardware desactivada (así arranca la app) algunas máquinas no dibujan
+        // ventanas transparentes y la barra quedaba invisible. El fondo es el mismo color de la barra.
+        backgroundColor: '#16181c',
         title: 'Controles de Lanzador APK',
         webPreferences: {
           preload: this.preload,
@@ -101,6 +105,8 @@ class ControlBar {
       this.win.on('closed', () => { this.win = null; });
     }
     this.label = label || '';
+    this._state = '';
+    this.log(`controlbar: attach (${this.label})`);
     this._last = '';
     this._misses = 0;
     this._schedule(120);
@@ -133,15 +139,25 @@ class ControlBar {
   async _tick() {
     this._timer = null;
     if (!this.active) return;
-    if (!this.enabled()) { this._hide(); this._schedule(1000); return; }
+    if (!this.enabled()) { this._hide('desactivada'); this._schedule(1000); return; }
     if (this._busy) { this._schedule(200); return; }
     this._busy = true;
     let t = null;
-    try { t = await this.agent.track(this._hwnd()); } catch (_) { t = null; } finally { this._busy = false; }
+    let err = '';
+    try { t = await this.agent.track(this._hwnd()); } catch (e) { t = null; err = e.message; } finally { this._busy = false; }
     if (!this.active) return;
     const usable = t && t.ok && t.emu && t.visible && !t.iconic && t.w > 120 && t.h > 120;
-    if (!usable || !t.fg) {
-      this._hide();
+    // Se muestra si el emulador tiene el foco, o si al menos está a la vista sin otra ventana encima
+    // (al abrir desde un acceso directo Windows no deja que el emulador tome el foco hasta que el usuario hace clic).
+    const inView = usable && (t.fg || t.covered === false);
+    if (!inView) {
+      let why = 'otra ventana encima del emulador';
+      if (!t || !t.ok) why = `sin respuesta del agente${err ? ` (${err})` : (t && t.error ? ` (${t.error})` : '')}`;
+      else if (!t.emu) why = 'no se encuentra la ventana del emulador';
+      else if (!t.visible) why = 'ventana del emulador oculta';
+      else if (t.iconic) why = 'ventana minimizada';
+      else if (!(t.w > 120 && t.h > 120)) why = `ventana demasiado pequeña (${t.w}x${t.h})`;
+      this._hide(why);
       // Sin ventana del emulador durante mucho rato (se reinicia el runtime, cambio de orientación): se sigue mirando, pero más despacio
       this._misses = usable ? 0 : this._misses + 1;
       this._schedule(this._misses > 20 ? 900 : 350);
@@ -164,12 +180,21 @@ class ControlBar {
         try { this.win.webContents.send('controlbar:side', p.side); } catch (_) { /* ignore */ }
       }
       if (!this.win.isVisible()) this.win.showInactive();
-    } catch (_) { /* La pantalla puede haber cambiado en este momento; se reintenta en la próxima ronda */ }
+      this._setState(`visible (${p.side}, ${b.x},${b.y})`);
+    } catch (e) { this._setState(`error al colocar: ${e.message}`); }
     this._schedule(200);
   }
 
-  _hide() {
+  _hide(why = '') {
     try { if (this.active && this.win.isVisible()) this.win.hide(); } catch (_) { /* ignore */ }
+    this._setState(`oculta: ${why}`);
+  }
+
+  /** Solo registra cuando cambia el estado (no en cada ronda de 200 ms) */
+  _setState(st) {
+    if (st === this._state) return;
+    this._state = st;
+    this.log(`controlbar: ${st}`);
   }
 }
 

@@ -83,6 +83,8 @@ public class ApkAgent
     [DllImport("user32.dll")] static extern IntPtr GetAncestor(IntPtr h, uint flags);
     [DllImport("user32.dll")] static extern bool IsWindow(IntPtr h);
     [DllImport("user32.dll")] static extern bool IsIconic(IntPtr h);
+    [DllImport("user32.dll")] static extern IntPtr GetWindow(IntPtr h, uint cmd);
+    [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr h, int attr, out int value, int size);
     [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
     [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
     [DllImport("ntdll.dll")] static extern int NtQueryInformationProcess(IntPtr h, int cls, ref PBI pbi, int len, out int ret);
@@ -742,6 +744,35 @@ public class ApkAgent
         // viejo y deja bordes negros. La franja de 8 px que desborda sobre la barra de título la tapa la barra dibujada por el anfitrión.
     }
 
+
+    // ¿Hay otra ventana normal encima del emulador tapándolo? Se recorre el orden Z hacia arriba desde el emulador.
+    // Se ignoran: la propia barra, ventanas ocultas/minimizadas/«cloaked» (otras apps de escritorios virtuales, UWP suspendidas),
+    // ventanas siempre-encima (barra de tareas, la propia barra) y ventanas de herramientas.
+    static bool CoveredByOther(IntPtr e, RECT r, long bar)
+    {
+        IntPtr w = GetWindow(e, 3); // GW_HWNDPREV
+        int guard = 0;
+        while (w != IntPtr.Zero && guard++ < 400)
+        {
+            if (w.ToInt64() != bar && IsWindowVisible(w) && !IsIconic(w))
+            {
+                int ex = GetWindowLong(w, GWL_EXSTYLE);
+                int cloaked = 0;
+                try { DwmGetWindowAttribute(w, 14, out cloaked, 4); } catch { cloaked = 0; }
+                if ((ex & 0x00000008) == 0 && (ex & WS_EX_TOOLWINDOW) == 0 && cloaked == 0)
+                {
+                    RECT o;
+                    GetWindowRect(w, out o);
+                    int ix = Math.Min(o.R, r.R) - Math.Max(o.L, r.L);
+                    int iy = Math.Min(o.B, r.B) - Math.Max(o.T, r.T);
+                    if (ix > 40 && iy > 40) return true;
+                }
+            }
+            w = GetWindow(w, 3);
+        }
+        return false;
+    }
+
     static void Raise()
     {
         if (_emu == IntPtr.Zero) return;
@@ -1389,7 +1420,7 @@ public class ApkAgent
                         IntPtr e = _emu != IntPtr.Zero && IsWindow(_emu) ? _emu : FindEmulator();
                         long bar = L(line, "bar");
                         RECT r = new RECT();
-                        bool vis = false, icon = false, fgOk = false;
+                        bool vis = false, icon = false, fgOk = false, covered = false;
                         if (e != IntPtr.Zero)
                         {
                             GetWindowRect(e, out r);
@@ -1399,15 +1430,25 @@ public class ApkAgent
                             if (fg != IntPtr.Zero)
                             {
                                 IntPtr root = GetAncestor(fg, 2);
-                                fgOk = fg == e || root == e || (bar != 0 && (fg.ToInt64() == bar || root.ToInt64() == bar));
+                                // Por proceso y no solo por identificador: el emulador (Qt) puede tener el foco en otra ventana
+                                // de nivel superior suya (ventana propietaria, panel) y entonces la barra nunca aparecía.
+                                uint epid = 0, fpid = 0;
+                                GetWindowThreadProcessId(e, out epid);
+                                GetWindowThreadProcessId(fg, out fpid);
+                                fgOk = fg == e || root == e || (epid != 0 && fpid == epid)
+                                    || (bar != 0 && (fg.ToInt64() == bar || root.ToInt64() == bar));
                             }
+                            // Si el emulador no tiene el foco (p. ej. recién abierto desde un acceso directo, Windows no le deja tomarlo),
+                            // basta con que no haya otra ventana tapándolo para mostrar la barra.
+                            if (!fgOk && vis && !icon) covered = CoveredByOther(e, r, bar);
                         }
                         Reply(sock, "{\"ok\":true,\"emu\":" + e.ToInt64()
                             + ",\"x\":" + r.L + ",\"y\":" + r.T
                             + ",\"w\":" + (r.R - r.L) + ",\"h\":" + (r.B - r.T)
                             + ",\"visible\":" + (vis ? "true" : "false")
                             + ",\"iconic\":" + (icon ? "true" : "false")
-                            + ",\"fg\":" + (fgOk ? "true" : "false") + "}");
+                            + ",\"fg\":" + (fgOk ? "true" : "false")
+                            + ",\"covered\":" + (covered ? "true" : "false") + "}");
                     }
                     else if (cmd == "probe")
                     {
