@@ -18,6 +18,7 @@ const { Provisioner } = require('./provision');
 const doctor = require('./doctor');
 const drivers = require('./drivers');
 const userdata = require('./userdata');
+const sparse = require('./sparse');
 
 const AVD_NAME = 'lanzadorapk';
 const SNAPSHOT_NAME = 'lanzadorapk';
@@ -544,6 +545,8 @@ class EmulatorEngine {
       // Aumentó la capacidad configurada (o el sistema de archivos no creció): se amplía en el sitio, sin recrear, conservando las apps instaladas
       try {
         userdata.clearEncryptFlag(img);
+        // Disperso antes de agrandar: si no, NTFS reserva todo el tamaño nuevo aunque sean ceros
+        if (size < wantBytes) sparse.flag(img);
         if (size < wantBytes) this._qemuImg('resize', img, wantBytes);
         this._resize2fs(img);
         userdata.setEncryptFlag(img);
@@ -563,6 +566,9 @@ class EmulatorEngine {
       fs.rmSync(`${img}.qcow2`, { force: true });
       // Primero sin el bit encrypt (solo así trabajan e2fsck/resize2fs antiguos)
       fs.writeFileSync(img, userdata.buildEmptyExt4({ sizeMB: 64, encrypt: false }));
+      // Disperso antes de agrandar a 4–16 GB: así la partición solo ocupa en disco lo que Android escribe de verdad
+      const sp = sparse.flag(img);
+      if (sp && sp.ok === false && !sp.skipped) this.log(`No se pudo marcar userdata como disperso: ${sp.error || '?'}`);
       this._qemuImg('resize', img, wantBytes);
       this._resize2fs(img);
       userdata.setEncryptFlag(img);
@@ -573,6 +579,49 @@ class EmulatorEngine {
       try { userdata.setEncryptFlag(img); } catch (_) { /* ignore */ }
       this.log(`No se pudo recrear userdata: ${e.message}`);
       return { ok: false, created: true, error: e.message };
+    }
+  }
+
+  /**
+   * Recupera espacio en disco antes de arrancar (el emulador todavía no tiene los archivos abiertos):
+   *  1. borra las instantáneas viejas renombradas (snapshots.stale-*): quedan cuando no se pudo borrar una instantánea
+   *     invalidada y cada una pesa lo mismo que la memoria de Android (2–8 GB); antes nadie las borraba solo;
+   *  2. en Windows, convierte la partición de datos en archivo disperso y devuelve al disco los bloques en cero
+   *     (la imagen de 4–16 GB ocupaba todo su tamaño aunque Android solo usara una parte). Tiene tope de tiempo
+   *     y continúa en el siguiente arranque si no terminó; el contenido de la imagen no cambia.
+   */
+  async reclaimDiskSpace(avdDir, onLog = () => {}) {
+    let names = [];
+    try { names = fs.readdirSync(avdDir); } catch (_) { return; }
+    for (const n of names) {
+      if (!/^snapshots\.stale-\d+$/i.test(n)) continue;
+      try {
+        fs.rmSync(path.join(avdDir, n), { recursive: true, force: true });
+        this.log(`Se borró una instantánea vieja: ${n}`);
+      } catch (_) { /* en uso: se intenta en el próximo arranque */ }
+    }
+    if (process.platform !== 'win32') return;
+    const img = path.join(avdDir, 'userdata-qemu.img');
+    const markerFile = path.join(avdDir, 'userdata.sparse.json');
+    let marker = null;
+    try { marker = JSON.parse(fs.readFileSync(markerFile, 'utf8')); } catch (_) { marker = null; }
+    const p = sparse.plan(img, marker);
+    if (!p.run) return;
+    onLog('Liberando el espacio que no usan los datos de Android (solo la primera vez puede tardar hasta un minuto)…');
+    const r = await sparse.compact(img, { start: p.start, maxSeconds: 60 });
+    let st = null;
+    try { st = fs.statSync(img); } catch (_) { /* ignore */ }
+    if (r && r.ok && st) {
+      try {
+        fs.writeFileSync(markerFile, JSON.stringify({
+          size: st.size, mtimeMs: st.mtimeMs, done: !!r.done, next: r.next || 0, at: Date.now(),
+        }));
+      } catch (_) { /* ignore */ }
+      const freedMB = Math.max(0, Math.round(((r.before || 0) - (r.after || 0)) / 1048576));
+      this.log(`userdata disperso: ${Math.round((r.before || 0) / 1048576)} MB → ${Math.round((r.after || 0) / 1048576)} MB en disco${r.done ? '' : ' (continúa en el próximo arranque)'}`);
+      if (freedMB > 100) onLog(`Se liberaron ${(freedMB / 1024).toFixed(1)} GB de disco`);
+    } else if (r && !r.skipped) {
+      this.log(`No se pudo compactar userdata: ${(r && r.error) || '?'}`);
     }
   }
 
@@ -1336,6 +1385,10 @@ class EmulatorEngine {
         // (probado: da Failed to load snapshot y vuelve al arranque en frío); hay que borrarla antes de recrear.
         wipe: plan.wipe || !!this.wipePending || !!this._forceWipe,
       });
+      if (i === 0) {
+        // eslint-disable-next-line no-await-in-loop
+        await this.reclaimDiskSpace(avd.avdDir, onLog).catch(() => {});
+      }
       // Punto de enganche: la capa superior (main) lo usa para activar la supresión de ventanas negras **antes** de lanzar el emulador.
       // La consola aparece decenas de milisegundos después del spawn; un escaneo posterior siempre la dejaría parpadear,
       // así que aquí hay que activarla primero y luego lanzar el proceso.
